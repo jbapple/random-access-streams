@@ -136,7 +136,7 @@ module Data.RandomAccessStream
     -- ** Ordered lists
     ,insert
     -- * Generalized functions
-    -- ** The By operations
+    -- ** The @By@ operations
     -- *** User-supplied equality (replacing an @Eq@ context)
     -- | The predicate is assumed to define an equivalence.
     , nubBy 
@@ -150,7 +150,7 @@ module Data.RandomAccessStream
     -- | The function is assumed to define a total ordering.
     , insertBy      
      
-    -- ** The \"@generic@\" operations
+    -- ** The @generic@ operations
      
     , genericTake   
     , genericDrop
