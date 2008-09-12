@@ -36,8 +36,10 @@ traditional linear stream.
 -}
 
 module Data.RandomAccessStream 
-    (Stream
+    (Stream(..)
      -- * Basic Functions
+     ,(++)
+    ,(+++)
     ,cons
     ,head
     ,tail
@@ -54,6 +56,7 @@ module Data.RandomAccessStream
     ,iterate
     ,repeat
     ,cycle
+    ,cycleFinite
     -- ** Scans
     ,scanl
     ,scanl1
@@ -81,6 +84,7 @@ module Data.RandomAccessStream
     ,breakWithCons
     ,stripPrefix
     ,group
+    ,groupSafe
     ,inits
     ,tails
     -- ** Predicates
@@ -145,11 +149,11 @@ module Data.RandomAccessStream
     , unionBy       
     , intersectBy   
     , groupBy       
-
+    , groupBySafe
     -- *** User-supplied comparison (replacing an @Ord@ context)
     -- | The function is assumed to define a total ordering.
     , insertBy      
-     
+
     -- ** The @generic@ operations
      
     , genericTake   
@@ -159,9 +163,7 @@ module Data.RandomAccessStream
     , genericSplitAtWithCons
     , genericIndex  
 
-     ,FiniteStream(..)
-     ,toStream
-     ,(++)
+
     )
 where
 
@@ -177,37 +179,13 @@ import Maybe
 import Data.Typeable
 import Data.Generics.Basics
 import Test.QuickCheck
-import Test.LazySmallCheck hiding (cons)
---import qualified LazySmallCheck as T
---import Test.SmallCheck
-import Control.Exception
-import System.IO.Unsafe
-
--- TODO: actual QC properties. Small check, too?
+import Array
+import qualified Data.Map as M
 
 -- TODO: zipper
 
 data Stream a = Stream a (Stream a) (Stream a) 
-   deriving (Data,Typeable) --,Show)
-
-(++) :: [a] -> Stream a -> Stream a
-x ++ y = foldr cons y x
-
-data FiniteStream a = FiniteStream a [a] deriving (Show)
-
-toStream :: FiniteStream a -> Stream a
-toStream (FiniteStream x y) = cycle (x:y)
-
-instance Functor FiniteStream where
-    fmap f (FiniteStream x y) = FiniteStream (f x) (fmap f y)
-
-instance Arbitrary a => Arbitrary (FiniteStream a) where
-    arbitrary = 
-        do
-          x <- arbitrary
-          y <- arbitrary
-          return $ FiniteStream x y
-    coarbitrary (FiniteStream x y) = coarbitrary x . coarbitrary y
+   deriving (Data,Typeable)
 
 instance Functor Stream where
     fmap f ~(Stream p q r) = Stream (f p) (fmap f q) (fmap f r)
@@ -239,54 +217,13 @@ instance Arbitrary a => Arbitrary (Stream a) where
           n <- (arbitrary :: Gen Int)
           coarbitrary (take (abs n) x) v
 
-{-
-data Tree a = Tree a (Maybe (Tree a)) (Maybe (Tree a)) deriving (Show)
 
-unperform :: Maybe (Tree a) -> Stream a
-unperform Nothing = error "\0sdfsd" --throw $ ErrorCall "nothing" --error "nothing"
-unperform (Just (Tree h od ev)) = 
-    Stream h (unperform od) (unperform ev)
+(++) :: [a] -> Stream a -> Stream a
+x ++ y = foldr cons y x
 
-perform :: Stream a -> Maybe (Tree a)
-perform x = unsafePerformIO $ 
-    do
-      y <- try (evaluate x)
-      case y of
-        Right (Stream h od ev) ->
-            return $ Just $ Tree h (perform od) (perform ev)
-        Left _ -> return Nothing
-{-
-        Left (ErrorCall ('\0':p)) -> return $ Nothing
-        Left e -> throw e
--}
--}
-{-
-instance Show a => Show (Stream a) where
-    show = show . perform
--}
-{-
-instance Show a => Show (Stream a) where
-    show x =
-        unsafePerformIO
-answer :: a -> (a -> IO b) -> (Pos -> IO b) -> IO b
-answer a known unknown =
-  do res <- try (evaluate a)
-     case res of
-       Right b -> known b
-       Left (ErrorCall ('\0':p)) -> unknown (map fromEnum p)
-       Left e -> throw e
--}
-instance Serial a => Serial (FiniteStream a) where
-    series = cons2 FiniteStream
+(+++) :: [a] -> Stream a -> Stream a
+x +++ y = fromList $ (L.++) x $ toList y
 
-{-
-instance Serial a => Serial (Stream a) where
-    series = cons3 Stream -- \/ T.cons (error "nil")
--}
-{-
-instance Serial a => Serial (Tree a) where
-    series = cons3 Tree
--}
 -- | O(lg n). Adds an element onto the head of the 'Stream'. If the
 -- first n elements of a stream x are already forced, traversing the
 -- first n elements of (cons y x) takes O(n + lg n) time. The new
@@ -298,7 +235,7 @@ cons x ~(Stream p q r) = Stream x (cons p r) q
 -- | O(lg n). Removes an element from the head of the 'Stream'. If the
 -- first n+1 elements of a stream x are already forced, traversing the
 -- first n elements of (tail x) takes O(n + lg n) time. The new
--- thinks are just before the elements at positions 2^i-2, counting
+-- thunks are just before the elements at positions 2^i-2, counting
 -- from 0.
 tail :: Stream a -> Stream a
 tail ~(Stream _ q r) = Stream (head q) r (tail q)
@@ -357,7 +294,11 @@ concatMap f = fromList . L.concatMap f . toList
 oddFromEven f x ~(Stream h od ev) =
     Stream x (oddFromEven f (f h) ev) (fmap f od)
 
-{- | O(n), with O(n) calls to the passed function.
+{- | 
+
+Forcing n elements of the result traverses O(n) thunks, O(1) at each
+element of result. The passed function is called n times.
+
 -}
 iterate :: (a -> a) -> a -> Stream a
 iterate f x =
@@ -375,9 +316,97 @@ repeat x = let y = repeat x in Stream x y y
 
 -- This could be faster. for instance, cycle [0,1] is Stream 0 (repeat 1) (repeat 0)
 -- Is that really faster? Repeat still puts thinks everywhere
--- | O(n).
+-- Would take up less memory.
+
+-- | O(1) thunk at each element of result stream. Fails if argument is
+-- the empty list.
 cycle :: [a] -> Stream a
 cycle = fromList . L.cycle
+
+--cycleFinite :: [a] -> Stream a
+{-
+cycleFinite [x] = repeat x
+cycleFinite [x,y] = Stream x (repeat y) (repeat x)
+cycleFinite [x,y,z] = 
+   let xyz = Stream x yxz zyx
+       yxz = Stream y xyz zxy
+       zyx = Stream z yzx xyz
+       zxy = Stream z xzy yxz
+       yzx = Stream y zyx xzy
+       xzy = Stream x zxy yxz
+   in xyz
+cycleFinite [p,q,r,s] = Stream p (cycleFinite [q,s]) (cycleFinite [r,p])
+{-
+cycleFinite [p,q,r,s,t] = 
+    let pqrst = Stream p qsprt rtqsp
+        qsprt = Stream q srqpt ptsrq
+        rtqsp = Stream r tsrqp qptsr
+        srqpt = Stream s qtrps rpsqt
+        ptsrq = Stream p trpsq sqtrp
+        tsrqp = Stream
+-}
+-}
+{-
+cycleFinite (x:xs) = 
+    let l = length xs
+        y = listArray (0,l) (x:xs)
+        f i j = let k = (j+j) `mod` (l+1)
+                    od = (i+j) `mod` (l+1)
+                    ev = (i+j+j) `mod` (l+1)
+                in Stream (y ! i) (w !!! (od,k)) (w !!! (ev,k))
+        z = array ((0,0),(l,l)) [((i,j),f i j) | i <- [0..l], j <- [0..l]]
+        w = M.fromList [((i,j),f i j) | i <- [0..l], j <- [0..l]]
+        p !!! q = fromJust $ M.lookup q p 
+   {-
+        z = array ((0,0),(l,l)) [((i,j),(y ! i, (i+j `mod` (l+1),i+j+j `mod` (l+1)))) | i <- [0..l], j <- [0..l]]
+        f i j = let (v,(p,q)) = z ! (i,j)
+                    j2 = j+j `mod` (l+1)
+                in Stream v (g ! (p,j2)) (g ! (q,j2))
+        g = array ((0,0),(l,l)) [((i,j),f i j) | i <- [0..l], j <- [0..l]]
+-}
+    in 
+      f 0 1{-(l,y,z)-}--z ! (0,1)
+-}
+{-
+[] +++ x = x
+(x:xs) +++ y = x : (xs +++ y)
+-}
+{-
+cycleFinite' :: [a] -> Stream a
+cycleFinite' (x:xs) =
+    let l = L.genericLength xs
+    in
+      if odd l
+      then let (y,z) = splits xs
+               splits [] = ([],[])
+               splits [x] = ([x],[])
+               splits (p:q:r) =
+                   let (s,t) = splits r
+                   in (p:s,q:t)
+           in Stream x (cycleFinite' y) (cycleFinite (z +++ [x]))
+      else if l == 0
+           then repeat x
+           else let y = listArray (0,l) (x:xs)
+                    f s i j = let k = (j+j) `mod` (l+1)
+                                  od = (i+j) `mod` (l+1)
+                                  ev = (i+j+j) `mod` (l+1)
+                              in {-if (i,j) == (0,1)
+                                 then s
+                                 else -}Stream (y ! i) (f s od k) (f s ev k)
+                    two = 2 `mod` (l+1)
+                    ans = Stream x (f ans 1 two) (f ans two two)
+           in ans
+-}
+
+cycleFinite :: [a] -> Stream a
+cycleFinite (x:xs) =
+    let l = L.genericLength xs
+        y = listArray (0,l) (x:xs)
+        f i j = let k = (j+j) `mod` (l+1)
+                    od = (i+j) `mod` (l+1)
+                    ev = (i+j+j) `mod` (l+1)
+                in Stream (y ! i) (f od k) (f ev k)
+        in f 0 1
 
 -- | O(n).
 scanl :: (a -> b -> a) -> a -> Stream b -> Stream a
@@ -474,10 +503,10 @@ splitAtWithCons :: Int -> Stream a -> ([a],Stream a)
 splitAtWithCons = genericSplitAtWithCons
 
 genericSplitAtWithCons :: (Integral x) => x -> Stream a -> ([a],Stream a)
-genericSplitAtWithCons 0 s = ([],s)
 genericSplitAtWithCons (n+1) s =
     let (p,q) = genericSplitAtWithCons n (tail s)
     in ((head s) : p, q)
+genericSplitAtWithCons _ s = ([],s)
 
 -- | O(|result|).
 takeWhile :: (a -> Bool) -> Stream a -> [a]
@@ -544,9 +573,20 @@ stripPrefixWithCons (x:xs) y =
 
 group :: (Eq a) => Stream a -> Stream [a]
 group = groupBy (==)
+
+groupSafe :: (Eq a) => Stream a -> Stream (a,[a])
+groupSafe = groupBySafe (==)
             
 groupBy :: (a -> a -> Bool) -> Stream a -> Stream [a]
 groupBy f = fromList . L.groupBy f . toList
+
+groupBySafe :: (a -> a -> Bool) -> Stream a -> Stream (a,[a])
+groupBySafe f = fromList . listGroupBySafe f . toList
+
+listGroupBySafe :: (a -> a -> Bool) -> [a] -> [(a,[a])]
+listGroupBySafe _  [] =  []
+listGroupBySafe eq (x:xs) =  (x,ys) : listGroupBySafe eq zs
+    where (ys,zs) = L.span (eq x) xs
 
 inits :: Stream a -> Stream [a]
 inits = zipWith ($) (map take nats) . repeat
@@ -656,25 +696,27 @@ fromLinearStream y = fmap S.head $ iterate S.tail y
 zip :: Stream a -> Stream b -> Stream (a,b)
 zip = zipWith (,)
 
-zip3 :: Stream a -> Stream b -> Stream c -> Stream (a,b,c)
-zip3 = zipWith3 (,,)
-
-zip4 :: Stream a -> Stream b -> Stream c -> Stream d -> Stream (a,b,c,d)
-zip4 = zipWith4 (,,,)
-
-zip5 ::  Stream a -> Stream b -> Stream c -> Stream d -> Stream e -> Stream (a,b,c,d,e)
-zip5 = zipWith5 (,,,,)
-
-zip6 ::  Stream a -> Stream b -> Stream c -> Stream d -> Stream e -> Stream f -> Stream (a,b,c,d,e,f)
-zip6 = zipWith6 (,,,,,)
-
-zip7 ::  Stream a -> Stream b -> Stream c -> Stream d -> Stream e -> Stream f -> Stream g -> Stream (a,b,c,d,e,f,g)
-zip7 = zipWith7 (,,,,,,)
+unzip :: Stream (a,b) -> (Stream a, Stream b)
+unzip ~(Stream (x,y) od ev) = 
+    let ~(p,q) = unzip od
+        ~(r,s) = unzip ev
+    in
+      (Stream x p r, Stream y q s)
 
 zipWith :: (a -> b -> c) -> Stream a -> Stream b -> Stream c
 zipWith f ~(Stream x y z) ~(Stream a b c) =
     Stream (f x a) (zipWith f y b)
                   (zipWith f z c)
+
+zip3 :: Stream a -> Stream b -> Stream c -> Stream (a,b,c)
+zip3 = zipWith3 (,,)
+
+unzip3 :: Stream (a,b,c) -> (Stream a,Stream b,Stream c)
+unzip3 ~(Stream (x,y,z) od ev) = 
+    let ~(p,q,t) = unzip3 od
+        ~(r,s,u) = unzip3 ev
+    in
+      (Stream x p r, Stream y q s, Stream z t u)
 
 zipWith3 :: (a -> b -> c -> d) -> Stream a -> Stream b -> Stream c -> Stream d
 zipWith3 f ~(Stream x xod xev)
@@ -682,12 +724,32 @@ zipWith3 f ~(Stream x xod xev)
            ~(Stream z zod zev) =
            Stream (f x y z) (zipWith3 f xod yod zod) (zipWith3 f xev yev zev)
 
+zip4 :: Stream a -> Stream b -> Stream c -> Stream d -> Stream (a,b,c,d)
+zip4 = zipWith4 (,,,)
+
+unzip4 :: Stream (a,b,c,d) -> (Stream a,Stream b,Stream c,Stream d)
+unzip4 ~(Stream (x,y,z,h) od ev) = 
+    let ~(p,q,t,i) = unzip4 od
+        ~(r,s,u,j) = unzip4 ev
+    in
+      (Stream x p r, Stream y q s, Stream z t u,Stream h i j)
+
 zipWith4 :: (a -> b -> c -> d -> e) -> Stream a -> Stream b -> Stream c -> Stream d -> Stream e
 zipWith4 f ~(Stream x xod xev)
            ~(Stream y yod yev)
            ~(Stream z zod zev) 
            ~(Stream p pod pev) =
            Stream (f x y z p) (zipWith4 f xod yod zod pod) (zipWith4 f xev yev zev pev)
+
+zip5 ::  Stream a -> Stream b -> Stream c -> Stream d -> Stream e -> Stream (a,b,c,d,e)
+zip5 = zipWith5 (,,,,)
+
+unzip5 :: Stream (a,b,c,d,e) -> (Stream a,Stream b,Stream c,Stream d,Stream e)
+unzip5 ~(Stream (x,y,z,h,k) od ev) = 
+    let ~(p,q,t,i,l) = unzip5 od
+        ~(r,s,u,j,m) = unzip5 ev
+    in
+      (Stream x p r, Stream y q s, Stream z t u,Stream h i j,Stream k l m)
 
 zipWith5 :: (a -> b -> c -> d -> e -> f) -> 
             Stream a -> Stream b -> Stream c -> Stream d -> Stream e -> Stream f
@@ -699,6 +761,16 @@ zipWith5 f ~(Stream x xod xev)
            Stream (f x y z p q) 
              (zipWith5 f xod yod zod pod qod) 
              (zipWith5 f xev yev zev pev qev)
+
+zip6 ::  Stream a -> Stream b -> Stream c -> Stream d -> Stream e -> Stream f -> Stream (a,b,c,d,e,f)
+zip6 = zipWith6 (,,,,,)
+
+unzip6 :: Stream (a,b,c,d,e,f) -> (Stream a,Stream b,Stream c,Stream d,Stream e,Stream f)
+unzip6 ~(Stream (x,y,z,h,k,n) od ev) = 
+    let ~(p,q,t,i,l,o) = unzip6 od
+        ~(r,s,u,j,m,w) = unzip6 ev
+    in
+      (Stream x p r, Stream y q s, Stream z t u,Stream h i j,Stream k l m,Stream n o w)
 
 zipWith6 :: (a -> b -> c -> d -> e -> f -> g) -> 
             Stream a -> Stream b -> Stream c -> Stream d -> Stream e -> Stream f -> Stream g
@@ -712,6 +784,16 @@ zipWith6 f ~(Stream x xod xev)
              (zipWith6 f xod yod zod pod qod rod)
              (zipWith6 f xev yev zev pev qev rev)
 
+zip7 ::  Stream a -> Stream b -> Stream c -> Stream d -> Stream e -> Stream f -> Stream g -> Stream (a,b,c,d,e,f,g)
+zip7 = zipWith7 (,,,,,,)
+
+unzip7 :: Stream (a,b,c,d,e,f,g) -> (Stream a,Stream b,Stream c,Stream d,Stream e,Stream f,Stream g)
+unzip7 ~(Stream (x,y,z,h,k,n,v) od ev) = 
+    let ~(p,q,t,i,l,o,vv) = unzip7 od
+        ~(r,s,u,j,m,w,vvv) = unzip7 ev
+    in
+      (Stream x p r, Stream y q s, Stream z t u,Stream h i j,Stream k l m,Stream n o w,Stream v vv vvv)
+
 zipWith7 :: (a -> b -> c -> d -> e -> f -> g -> h) -> 
             Stream a -> Stream b -> Stream c -> Stream d -> Stream e -> Stream f -> Stream g -> Stream h
 zipWith7 f ~(Stream x xod xev)
@@ -724,53 +806,6 @@ zipWith7 f ~(Stream x xod xev)
            Stream (f x y z p q r s) 
              (zipWith7 f xod yod zod pod qod rod sod)
              (zipWith7 f xev yev zev pev qev rev sev)
-
-{- 
-
-Turns a list of pairs into a pair of lists.
-
--}
-unzip :: Stream (a,b) -> (Stream a, Stream b)
-unzip ~(Stream (x,y) od ev) = 
-    let ~(p,q) = unzip od
-        ~(r,s) = unzip ev
-    in
-      (Stream x p r, Stream y q s)
-
-unzip3 :: Stream (a,b,c) -> (Stream a,Stream b,Stream c)
-unzip3 ~(Stream (x,y,z) od ev) = 
-    let ~(p,q,t) = unzip3 od
-        ~(r,s,u) = unzip3 ev
-    in
-      (Stream x p r, Stream y q s, Stream z t u)
-
-unzip4 :: Stream (a,b,c,d) -> (Stream a,Stream b,Stream c,Stream d)
-unzip4 ~(Stream (x,y,z,h) od ev) = 
-    let ~(p,q,t,i) = unzip4 od
-        ~(r,s,u,j) = unzip4 ev
-    in
-      (Stream x p r, Stream y q s, Stream z t u,Stream h i j)
-
-unzip5 :: Stream (a,b,c,d,e) -> (Stream a,Stream b,Stream c,Stream d,Stream e)
-unzip5 ~(Stream (x,y,z,h,k) od ev) = 
-    let ~(p,q,t,i,l) = unzip5 od
-        ~(r,s,u,j,m) = unzip5 ev
-    in
-      (Stream x p r, Stream y q s, Stream z t u,Stream h i j,Stream k l m)
-
-unzip6 :: Stream (a,b,c,d,e,f) -> (Stream a,Stream b,Stream c,Stream d,Stream e,Stream f)
-unzip6 ~(Stream (x,y,z,h,k,n) od ev) = 
-    let ~(p,q,t,i,l,o) = unzip6 od
-        ~(r,s,u,j,m,w) = unzip6 ev
-    in
-      (Stream x p r, Stream y q s, Stream z t u,Stream h i j,Stream k l m,Stream n o w)
-
-unzip7 :: Stream (a,b,c,d,e,f,g) -> (Stream a,Stream b,Stream c,Stream d,Stream e,Stream f,Stream g)
-unzip7 ~(Stream (x,y,z,h,k,n,v) od ev) = 
-    let ~(p,q,t,i,l,o,vv) = unzip7 od
-        ~(r,s,u,j,m,w,vvv) = unzip7 ev
-    in
-      (Stream x p r, Stream y q s, Stream z t u,Stream h i j,Stream k l m,Stream n o w,Stream v vv vvv)
 
 lines :: Stream Char -> Stream [Char]
 lines = fromList . L.lines . toList

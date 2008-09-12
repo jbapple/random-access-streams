@@ -7,6 +7,7 @@ import Test.QuickCheck hiding ((==>))
 import Test.LazySmallCheck hiding (cons)
 import qualified Test.SmallCheck as T
 import Control.Applicative
+import Debug.Trace
 
 import Prelude hiding (head, tail, map, scanl, scanl1, iterate, take,
   drop, takeWhile, dropWhile, repeat, cycle, filter, (!!), zip, unzip,
@@ -15,9 +16,30 @@ import Prelude hiding (head, tail, map, scanl, scanl1, iterate, take,
 
 import qualified Data.List as L
 
+data FiniteStream a = FiniteStream a [a] deriving (Show)
+
+toStream :: FiniteStream a -> Stream a
+toStream (FiniteStream x y) = cycle (x:y)
+
+instance Functor FiniteStream where
+    fmap f (FiniteStream x y) = FiniteStream (f x) (fmap f y)
+
+instance Arbitrary a => Arbitrary (FiniteStream a) where
+    arbitrary =
+        do
+          x <- arbitrary
+          y <- arbitrary
+          return $ FiniteStream x y
+    coarbitrary (FiniteStream x y) = coarbitrary x . coarbitrary y
+
+instance Serial a => Serial (FiniteStream a) where
+    series = cons2 FiniteStream
+
+
+
 lCheck = 
     do
-
+{-
       putStrLn "toList . fromList == id"
       smallCheck 11 (\(x::[Bool]) -> L.take (length x) (toList (fromList x)) == x)
       quickCheck (\(x::[[[[Int]]]]) -> L.take (length x) (toList (fromList x)) == x)
@@ -362,6 +384,121 @@ lCheck =
       quickCheck (\n (x' :: FiniteStream [[[Int]]]) ->
                   let x = toStream x'
                   in genericTake n x == take n x)
+
+      putStrLn "n <= 0 => drop n x == x"
+      smallCheck 4 (\n (x' :: FiniteStream Int) ->
+                    let x = toStream x'
+                    in n <= 0 ==> equalUpTo 10 (drop n x) x == EQ)
+      quickCheck (\n' (x' :: FiniteStream [[[Int]]]) ->
+                  let x = toStream x'
+                      n = -(abs n')
+                  in n <= 0 ==> equalUpTo 250 (drop n x) x == EQ)
+
+      putStrLn "n > 0 => drop n x == drop (n-1) (tail x)"
+      smallCheck 4 (\n (x' :: FiniteStream [Int]) ->
+                    let x = toStream x'
+                    in n > 0 ==> equalUpTo 10 (drop n x) (drop (n-1) (tail x)) == EQ)
+      quickCheck (\n (x' :: FiniteStream [[[Int]]]) ->
+                  let x = toStream x'
+                  in n > 0 ==> equalUpTo 250 (drop n x) (drop (n-1) (tail x)) == EQ)
+
+      putStrLn "genericDrop n x == drop n x"
+      smallCheck 4 (\n (x' :: FiniteStream [Bool]) ->
+                    let x = toStream x'
+                    in equalUpTo 10 (genericDrop n x) (drop n x) == EQ)
+      quickCheck (\n (x' :: FiniteStream [[[Int]]]) ->
+                  let x = toStream x'
+                  in equalUpTo 250 (genericDrop n x) (drop n x) == EQ)
+
+      putStrLn "dropWithCons n x == drop n x"
+      smallCheck 4 (\n (x' :: FiniteStream [Bool]) ->
+                    let x = toStream x'
+                    in equalUpTo 10 (dropWithCons n x) (drop n x) == EQ)
+      quickCheck (\n (x' :: FiniteStream [[[Int]]]) ->
+                  let x = toStream x'
+                  in equalUpTo 250 (dropWithCons n x) (drop n x) == EQ)
+
+      putStrLn "genericDropWithCons n x == drop n x"
+      smallCheck 4 (\n (x' :: FiniteStream [Bool]) ->
+                    let x = toStream x'
+                    in equalUpTo 10 (genericDropWithCons n x) (drop n x) == EQ)
+      quickCheck (\n (x' :: FiniteStream [[[Int]]]) ->
+                  let x = toStream x'
+                  in equalUpTo 250 (genericDropWithCons n x) (drop n x) == EQ)
+
+      putStrLn "let (f,s) = splitAt n x in f == take n x && s == drop n x"
+      smallCheck 4 (\n (x' :: FiniteStream Int) ->
+                    let x = toStream x'
+                        (f,s) = splitAt n x 
+                    in (f == take n x) &&& (equalUpTo 15 s (drop n x) == EQ))
+      quickCheck (\n (x' :: FiniteStream [[[Int]]]) ->
+                  let x = toStream x'
+                      (f,s) = splitAt n x 
+                  in (f == take n x) && (equalUpTo 200 s (drop n x) == EQ))
+
+      putStrLn "splitAt n x == genericSplitAt n x"
+      smallCheck 4 (\n (x' :: FiniteStream Int) ->
+                    let x = toStream x'
+                        (f,s) = splitAt n x 
+                        (f',s') = genericSplitAt n x
+                    in (f == f') &&& (equalUpTo 15 s s' == EQ))
+      quickCheck (\n (x' :: FiniteStream [[[Bool]]]) ->
+                  let x = toStream x'
+                      (f,s) = splitAt n x 
+                      (f',s') = genericSplitAt n x
+                  in (f == f') && (equalUpTo 150 s s' == EQ))
+
+      putStrLn "splitAt n x == splitAtWithCons n x"
+      smallCheck 4 (\n (x' :: FiniteStream Int) ->
+                    let x = toStream x'
+                        (f,s) = splitAt n x 
+                        (f',s') = splitAtWithCons n x
+                    in (f == f') &&& (equalUpTo 15 s s' == EQ))
+      quickCheck (\n (x' :: FiniteStream [[[Bool]]]) ->
+                  let x = toStream x'
+                      (f,s) = splitAt n x 
+                      (f',s') = splitAtWithCons n x
+                  in (f == f') && (equalUpTo 150 s s' == EQ))
+
+      putStrLn "splitAt n x == genericSplitAtWithCons n x"
+      smallCheck 4 (\n (x' :: FiniteStream Int) ->
+                    let x = toStream x'
+                        (f,s) = splitAt n x 
+                        (f',s') = genericSplitAtWithCons n x
+                    in (f == f') &&& (equalUpTo 15 s s' == EQ))
+      quickCheck (\n (x' :: FiniteStream [[[Bool]]]) ->
+                  let x = toStream x'
+                      (f,s) = splitAt n x 
+                      (f',s') = genericSplitAtWithCons n x
+                  in (f == f') && (equalUpTo 150 s s' == EQ))
+-}
+      putStrLn "all f (takeWhile f x)"
+      quickCheck (\f (x' :: FiniteStream Int) ->
+                  let x = toStream x'
+                  in all f $ L.take 10000 $ takeWhile f x)
+
+      putStrLn "f (head x) => head (takeWhile f x) == head x"
+      quickCheck (\f (x' :: FiniteStream [[Int]]) ->
+                  let x = toStream x'
+                  in {- trace ((show x')+++"\n\n"+++(show f)) -}
+                     (f (head x) ==> L.head (takeWhile f x) == head x))
+
+      putStrLn "not (f $ head x) => null (takeWhile f x)"
+      quickCheck (\f (x' :: FiniteStream [[Int]]) ->
+                  let x = toStream x'
+                  in not (f $ head x) ==> null (takeWhile f x))
+
+      putStrLn "f (head x) => tail (takeWhile f x) = takeWhile f (tail x)"
+      quickCheck (\f (x' :: FiniteStream Int) ->
+                  let x = toStream x'
+                  in f (head x) ==> L.take 10000 (L.tail $ takeWhile f x) == L.take 10000 (takeWhile f $ tail x))
+
+      putStrLn "not (f $ head x) ==> dropWhile f x == x"
+      putStrLn "(not $ f x) && (f y) ==> let z = y ++ (ys ++ (x ++ r)) in dropWhile f z == dropWhile f (tail z)"
+      putStrLn "not (f x) ==> let z = y ++ (x ++ r) in dropWhileWithCons f z == dropWhile f z"
+
+[] +++ y = y
+(x:xs) +++ y = x:(xs +++ y)
 
 data Void
 {-
