@@ -104,8 +104,8 @@ module Data.RandomAccessStream
     -- * Conversions
     ,fromList
     ,toList
-    ,fromLinearStream
-    ,toLinearStream
+--    ,fromLinearStream
+--    ,toLinearStream
      -- ** Zips
     ,zip
     ,zip3
@@ -162,26 +162,24 @@ module Data.RandomAccessStream
     , genericSplitAt
     , genericSplitAtWithCons
     , genericIndex  
-
-
+--    ,memoize
     )
 where
 
 import Prelude hiding (head, tail, map, scanl, scanl1, iterate, take,
   drop, takeWhile, dropWhile, repeat, cycle, filter, (!!), zip, unzip,
   unzip3, zipWith, words, unwords, lines, unlines, break, span,
-  splitAt, zipWith3, zip3, concat, concatMap, lookup, (++))
+  splitAt, zipWith3, zip3, concat, concatMap, lookup, (++),catch)
 
-import qualified Data.Stream as S
+--import qualified Data.Stream as S
 import Control.Applicative
 import qualified Data.List as L
 import Maybe
 import Data.Typeable
 import Data.Generics.Basics
-import Test.QuickCheck
+import Test.QuickCheck hiding (evaluate)
 import Array
-import qualified Data.Map as M
-
+import Control.Exception
 -- TODO: zipper
 
 data Stream a = Stream a (Stream a) (Stream a) 
@@ -323,90 +321,37 @@ repeat x = let y = repeat x in Stream x y y
 cycle :: [a] -> Stream a
 cycle = fromList . L.cycle
 
---cycleFinite :: [a] -> Stream a
 {-
-cycleFinite [x] = repeat x
-cycleFinite [x,y] = Stream x (repeat y) (repeat x)
-cycleFinite [x,y,z] = 
-   let xyz = Stream x yxz zyx
-       yxz = Stream y xyz zxy
-       zyx = Stream z yzx xyz
-       zxy = Stream z xzy yxz
-       yzx = Stream y zyx xzy
-       xzy = Stream x zxy yxz
-   in xyz
-cycleFinite [p,q,r,s] = Stream p (cycleFinite [q,s]) (cycleFinite [r,p])
-{-
-cycleFinite [p,q,r,s,t] = 
-    let pqrst = Stream p qsprt rtqsp
-        qsprt = Stream q srqpt ptsrq
-        rtqsp = Stream r tsrqp qptsr
-        srqpt = Stream s qtrps rpsqt
-        ptsrq = Stream p trpsq sqtrp
-        tsrqp = Stream
--}
--}
-{-
-cycleFinite (x:xs) = 
-    let l = length xs
-        y = listArray (0,l) (x:xs)
-        f i j = let k = (j+j) `mod` (l+1)
-                    od = (i+j) `mod` (l+1)
-                    ev = (i+j+j) `mod` (l+1)
-                in Stream (y ! i) (w !!! (od,k)) (w !!! (ev,k))
-        z = array ((0,0),(l,l)) [((i,j),f i j) | i <- [0..l], j <- [0..l]]
-        w = M.fromList [((i,j),f i j) | i <- [0..l], j <- [0..l]]
-        p !!! q = fromJust $ M.lookup q p 
-   {-
-        z = array ((0,0),(l,l)) [((i,j),(y ! i, (i+j `mod` (l+1),i+j+j `mod` (l+1)))) | i <- [0..l], j <- [0..l]]
-        f i j = let (v,(p,q)) = z ! (i,j)
-                    j2 = j+j `mod` (l+1)
-                in Stream v (g ! (p,j2)) (g ! (q,j2))
-        g = array ((0,0),(l,l)) [((i,j),f i j) | i <- [0..l], j <- [0..l]]
--}
-    in 
-      f 0 1{-(l,y,z)-}--z ! (0,1)
--}
-{-
-[] +++ x = x
-(x:xs) +++ y = x : (xs +++ y)
--}
-{-
-cycleFinite' :: [a] -> Stream a
-cycleFinite' (x:xs) =
-    let l = L.genericLength xs
-    in
-      if odd l
-      then let (y,z) = splits xs
-               splits [] = ([],[])
-               splits [x] = ([x],[])
-               splits (p:q:r) =
-                   let (s,t) = splits r
-                   in (p:s,q:t)
-           in Stream x (cycleFinite' y) (cycleFinite (z +++ [x]))
-      else if l == 0
-           then repeat x
-           else let y = listArray (0,l) (x:xs)
-                    f s i j = let k = (j+j) `mod` (l+1)
-                                  od = (i+j) `mod` (l+1)
-                                  ev = (i+j+j) `mod` (l+1)
-                              in {-if (i,j) == (0,1)
-                                 then s
-                                 else -}Stream (y ! i) (f s od k) (f s ev k)
-                    two = 2 `mod` (l+1)
-                    ans = Stream x (f ans 1 two) (f ans two two)
-           in ans
+head $ cycleFinite $ replicate (10^6) 2
+*** Exception: stack overflow
 -}
 
-cycleFinite :: [a] -> Stream a
+{-
+*Data.RandomAccessStream> L.genericLength [1..(10^8)]
+*** Exception: stack overflow
+*Data.RandomAccessStream> length [1..(10^8)]
+100000000
+-}
+
+{-
+*Data.RandomAccessStream> length $  replicate (2^31) 2
+0
+
+generic replicate
+-}
+
+
+--cycleFinite :: [a] -> Stream a
 cycleFinite (x:xs) =
-    let l = L.genericLength xs
+    let l = gl xs
         y = listArray (0,l) (x:xs)
         f i j = let k = (j+j) `mod` (l+1)
                     od = (i+j) `mod` (l+1)
                     ev = (i+j+j) `mod` (l+1)
                 in Stream (y ! i) (f od k) (f ev k)
-        in f 0 1
+        gl = L.foldl' (\x y -> 1+x) 0
+        in 
+          f 0 1
 
 -- | O(n).
 scanl :: (a -> b -> a) -> a -> Stream b -> Stream a
@@ -689,9 +634,11 @@ findIndices f = fromList . L.findIndices f . toList
 fromList :: [a] -> Stream a
 fromList y = fmap L.head $ iterate L.tail y
 
+{-
 -- | O(n)
 fromLinearStream :: S.Stream a -> Stream a
 fromLinearStream y = fmap S.head $ iterate S.tail y
+-}
 
 zip :: Stream a -> Stream b -> Stream (a,b)
 zip = zipWith (,)
@@ -861,21 +808,21 @@ deleteFirstsBy f x (y:ys) = deleteFirstsBy f (deleteBy f y x) ys
 intersectBy :: (a -> a -> Bool) -> Stream a -> Stream a -> Stream a
 intersectBy f x y = map fst $
                     filter (uncurry f) $ 
-                    fromLinearStream $ 
+                    fromList $ 
                     flatten $ 
-                    cartesianProduct (toLinearStream x) (toLinearStream y)
+                    cartesianProduct (toList x) (toList y)
 
-cartesianProduct :: S.Stream a -> S.Stream a -> S.Stream (S.Stream (a,a))
-cartesianProduct (S.Cons x xs) ys =
-    S.Cons (S.zip (S.repeat x) ys) $
-     cartesianProduct xs ys
+--cartesianProduct :: S.Stream a -> S.Stream a -> S.Stream (S.Stream (a,a))
+cartesianProduct (x:xs) ys =
+    (L.zip (L.repeat x) ys) : (cartesianProduct xs ys)
 
+{-
 streamConcat :: S.Stream [a] -> S.Stream a
 streamConcat (S.Cons x xs) = foldr S.Cons (streamConcat xs) x
-
-flatten :: S.Stream (S.Stream a) -> S.Stream a
-flatten = streamConcat . takeFrom 1
-
+-}
+--flatten :: S.Stream (S.Stream a) -> S.Stream a
+flatten = L.concat . takeFrom 1
+{-
 streamGenericTake :: Integer -> S.Stream a -> [a]
 streamGenericTake 0 _ = []
 streamGenericTake (n+1) (S.Cons x xs) = x : (streamGenericTake n xs)
@@ -883,13 +830,13 @@ streamGenericTake (n+1) (S.Cons x xs) = x : (streamGenericTake n xs)
 streamGenericDrop :: Integer -> S.Stream a -> S.Stream a
 streamGenericDrop 0 x = x
 streamGenericDrop (n+1) (S.Cons x xs) = streamGenericDrop n xs
-
-takeFrom :: Integer -> S.Stream (S.Stream a) -> S.Stream [a]
-takeFrom n x = S.Cons (streamGenericTake n (S.map S.head x)) $ 
-               takeFrom (n+1) $
-               foldr S.Cons (streamGenericDrop n x) $
-               streamGenericTake n $ 
-               S.map S.tail x
+-}
+--takeFrom :: Integer -> S.Stream (S.Stream a) -> S.Stream [a]
+takeFrom n x = (L.genericTake n (L.map L.head x)) :
+               (takeFrom (n+1) $
+                foldr (:) (L.genericDrop n x) $
+                L.genericTake n $ 
+                L.map L.tail x)
 
 insertBy :: (a -> a -> Ordering) -> a -> Stream a -> Stream a
 insertBy f x = fromList . L.insertBy f x . toList
@@ -907,11 +854,11 @@ size. If @i<=0@, returns the empty list.
 -}
 upTo :: (Integral x) => x -> (x -> a -> b) -> Stream a -> [b]
 upTo 0 _ _ = []
-upTo (n+1) f x = upTo' (n+1) f (toLinearStream x)
+upTo (n+1) f x = upTo' (n+1) f (toList x)
 upTo m _ _ = []
 
 upTo' 0 _ _ = []
-upTo' (n+1) f ~(S.Cons x xs) = (f n x):(upTo' n f xs)
+upTo' (n+1) f ~(x:xs) = (f n x):(upTo' n f xs)
 
 {- |
 
@@ -994,13 +941,14 @@ constant @c@, places no more than @c@ thunks at each node in the
 result.
 
 -}
+{-
 toLinearStream :: Stream a -> S.Stream a
 toLinearStream t = toLinearStream' [t]
 toLinearStream' x = 
     let heads = L.map head x
         (ods,evs) = breakParity x in
     L.foldr S.Cons (toLinearStream' (ods `listAppend` evs)) heads
-
+-}
 interleaveL [] x = x
 interleaveL x [] = x
 interleaveL (x:xs) (y:ys) = x : y : interleaveL xs ys

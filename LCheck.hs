@@ -497,9 +497,10 @@ lCheck =
       putStrLn "(not $ f x) && (f y) ==> let z = y ++ (ys ++ (x ++ r)) in dropWhile f z == dropWhile f (tail z)"
       putStrLn "not (f x) ==> let z = y ++ (x ++ r) in dropWhileWithCons f z == dropWhile f z"
 
+{-
 [] +++ y = y
 (x:xs) +++ y = x:(xs +++ y)
-
+-}
 data Void
 {-
 void :: Void -> a

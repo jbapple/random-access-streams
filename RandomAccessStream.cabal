@@ -1,0 +1,20 @@
+Name:                   RandomAccessStream
+Version:                0.1
+License:                BSD3
+Author:                 Jim Apple
+Maintainer:             Jim Apple <random-access-stream@jbapple.com>
+Homepage:               http://code.google.com/p/random-access-streams/
+Synopsis:               Infinite lists with quick access to elements by index
+Description:            This project provides an implementation of infinite-length lists that aims to improve on:
+
+			 * [http://hackage.haskell.org/cgi-bin/hackage-scripts/package/Stream Data.Stream] by offering a @O(lg n)@ bound for @(!!)@
+			 * [http://www.haskell.org/ghc/docs/latest/html/libraries/containers/Data-Sequence.html Data.Sequence] by allowing lists to be infinite.
+
+			 Unfortunately, @cons@ is an @O(lg k)@ (where @k@ elements of the stream are eventually forced) operation, while is it @O(1)@ on regular lists, Data.Sequences, and Data.Streams.
+
+			 The internal representation uses Braun trees.
+Category:               Data
+Build-Depends:          base, QuickCheck < 2, Stream, haskell98
+Build-Type:		Simple
+Exposed-modules:        Data.RandomAccessStream
+
