@@ -1,0 +1,235 @@
+\documentclass{article}
+\author{Jim Apple}
+%\usepackage{graphics,graphicx,epsfig,verbatim,times}
+\usepackage{amsthm}
+%\usepackage{pstricks}
+\usepackage{amssymb,amsmath,algorithmic,algorithm,verbatim,alltt}
+
+\DeclareMathOperator{\oddFrom}{oddFromEven}
+\DeclareMathOperator{\nil}{\langle\rangle}
+\DeclareMathOperator{\cons}{cons}
+\DeclareMathOperator{\true}{true}
+\DeclareMathOperator{\false}{false}
+\DeclareMathOperator{\head}{head}
+\DeclareMathOperator{\evens}{evens}
+\DeclareMathOperator{\odds}{odds}
+\DeclareMathOperator{\fmap}{fmap}
+\DeclareMathOperator{\iter}{iterate}
+\newcommand{\ord}[1]{\|#1\|}
+\DeclareMathOperator{\ev}{ev}
+\DeclareMathOperator{\od}{od}
+%\renewcommand{\algorithmiccomment}[1]{// #1}
+%\DeclareMathOperator{\lag}{\log}
+
+%\begin{comment}
+\newtheorem{theorem}{Theorem}
+\newtheorem{claim}[theorem]{Claim}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{fact}[theorem]{Fact}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{observation}[theorem]{Observation}
+\newtheorem{proposition}[theorem]{Proposition}
+
+%\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+
+
+%\end{comment}
+
+\begin{document}
+
+\title{A linear-time iterate for Braun streams and its verified proof of correctness}
+
+\author{Jim Apple}
+%\institute{Department of Computer Science, UC Davis\\
+%\{apple, gusfield, balaji\}@cs.ucdavis.edu \and
+%Department of Mathematics and Computer Science, Lehman College,\\
+%and Department of Computer Science, Graduate Center,\\
+%  City University of New York.\\
+%stjohn@lehman.cuny.edu
+%}
+
+\maketitle
+
+\section*{Abstract}
+
+\cite{HinzePat}
+
+\section{The algorithm}
+
+\begin{alltt}
+data Stream a = Stream a (Stream a) (Stream a) 
+
+instance Functor Stream where
+    fmap f (Stream p q r) = Stream (f p) (fmap f q) (fmap f r)
+
+oddFromEven :: (a -> b) -> b -> Stream a -> Stream b
+oddFromEven f x  \(\sim\)(Stream h od ev) =
+    Stream x (oddFromEven f (f h) ev) (fmap f od)
+
+iterate :: (a -> a) -> a -> Stream a
+iterate f x =
+    let ev = fmap f od
+        od = oddFromEven f (f x) ev
+    in
+      Stream x od ev
+\end{alltt}
+
+\section{The proof}
+
+\begin{lemma}
+For any $f, b, x, e, k$
+if
+\begin{displaymath}
+\forall j . \ord{j} < \ord{b} \implies e@j = f^{2^k\ord{j}+2^{k+1}-2}x
+\end{displaymath}
+then
+\begin{displaymath}
+(\oddFrom f\ (f^{2^k-1}x)\ e)@b = f^{2^k\ord{b}+2^k-1}x
+\end{displaymath}
+\end{lemma}
+\begin{proof}
+We prove this by structural induction on $b$. If $b = \nil$, then 
+\begin{displaymath}
+\begin{array}{rcl}
+(\oddFrom f\ (f^{2^k-1}x)\ e)@b & = & (\oddFrom f\ (f^{2^k-1}x)\ e)@\nil \\
+& = & f^{2^k-1}x \\
+& = & f^{0+2^k-1}x \\
+& = & f^{2^k\ord{\nil}+2^k-1}x
+\end{array}
+\end{displaymath}
+
+If $b = \cons \true d$,
+\begin{displaymath}
+\begin{array}{rcl}
+(\oddFrom f\ (f^{2^k-1}x)\ e)@(\cons \true d)& = & \\
+(\oddFrom f\ (f (\head e))\ (\evens e))@d& = & \\
+(\oddFrom f\ (f (f^{2^{k+1}-2}e))\ (\evens e))@d& = & \\
+(\oddFrom f\ (f^{2^{k+1}-1}e)\ (\evens e))@d&  & 
+\end{array}
+\end{displaymath}
+
+Now, for all $g$ such that $\ord{g} < \ord{d}$, $\ord{g} \leq \ord{d}-1$, so 
+\begin{displaymath}
+\ord{\cons \false g} = 2 + 2\ord{g} \leq 2 + 2(\ord{d} -1) = 2\ord{d} < 1+2\ord{d} = \ord{\cons \true d}
+\end{displaymath}
+
+So, $\ord{\cons \false g} < \ord{b}$, and 
+\begin{displaymath}
+\begin{array}{rcccl}
+(\evens e)@g & = & e@(\cons \false g) & = & f^{2^k\ord{\cons \false g}+2^{k+1}-2}x \\
+& & & = & f^{2^k(2+2\ord{g})+2^{k+1}-2}x \\
+& & & = & f^{2^{k+1} + 2^{k+1}\ord{g}+2^{k+1}-2}x \\
+& & & = & f^{2^{k+1}\ord{g}+2^{k+2}-2}x 
+\end{array}
+\end{displaymath}
+
+Since this holds for all $g < d$ we can invoke the induction hypothesis with $k := k+1$ and $e := \evens e$.
+This implies that
+
+\begin{displaymath}
+\begin{array}{rcl}
+(\oddFrom f\ (f^{2^k-1}x)\ e)@b & = & (\oddFrom f\ (f^{2^{k+1}-1}x)\ (\evens e))@d \\
+& = & f^{2^{k+1}d+2^{k+1}-1} x \\
+& = & f^{2^k2d+2^k+2^k-1} x \\
+& = & f^{2^k(2d+1)+2^k-1} x \\
+& = & f^{2^k\ord{\cons \true d}+2^k-1} x \\
+& = & f^{2^k\ord{b}+2^k-1} x
+\end{array}
+\end{displaymath}
+
+If $b = \cons \false d$,
+
+\begin{displaymath}
+\begin{array}{rcl}
+(\oddFrom f\ (f^{2^k-1}x)\ e)@(\cons \false d)& = & (\fmap f\ (\odds e))@d \\
+& = & f ((\odds e)@d)
+\end{array}
+\end{displaymath}
+
+Since
+$\ord{\cons \true d} = 1+2\ord{d} < 2+2\ord{d} = \ord{\cons \true d}$,
+
+\begin{displaymath}
+\begin{array}{rcccl}
+f((\odds e)@d) & = & f(e@(\cons \true d)) & = & f(f^{2^k\ord{\cons \true d}+2^{k+1}-2}x) \\
+& & & = & f^{1+2^k(1+2\ord{d})+2^{k+1}-2}x \\
+& & & = & f^{2^k+2^{k+1}\ord{d}+2^{k+1}-1}x \\
+& & & = & f^{2^k(2+2\ord{d})+2^k-1}x \\
+& & & = & f^{2^k\ord{\cons \false d}+2^k-1}x \\
+& & & = & f^{2^k\ord{b}+2^k-1}x
+\end{array}
+\end{displaymath}
+
+\end{proof}
+
+\begin{corollary}
+For any $f, b, x, e$
+if
+\begin{displaymath}
+\forall j . \ord{j} < \ord{b} \implies e@j = f^{\ord{\cons \false j}}x
+\end{displaymath}
+then
+\begin{displaymath}
+(\oddFrom f\ (f x)\ e)@b = f^{\ord{\cons \true b}}x
+\end{displaymath}
+\end{corollary}
+\qed
+
+\begin{theorem}
+\begin{displaymath}
+\forall f\ x\ b, (\iter f\ x)@b = f^\ord{b} x
+\end{displaymath}
+\end{theorem}
+\begin{proof}
+
+We proceed by well-founded induction on $\ord{b}$.
+If $b = \nil$, the equality is trivial.
+Otherwise, let $b = \cons a\ d$.
+There is a lemma that is needed whether $a$ is $\true$ or $\false$
+
+\begin{lemma}
+\begin{displaymath}
+(\oddFrom f\ (f x)\ \ev)@d = f^{2\ord{d}+1}x
+\end{displaymath}
+\end{lemma}
+\begin{proof}
+This is a direct result of the corollary as long as 
+\begin{displaymath}
+\forall j, \ord{j} < \ord{d} \implies \ev @j = f^{2\ord{j}+2}
+\end{displaymath}
+
+Since $\ord{j} < \ord{d}$, $2\ord{j}+2 < 2\ord{d}+2 <= \ord{b}$, so we can apply the induction hypothesis to $2\ord{j}+2 = \ord{\cons \false\ j}$:
+
+\begin{displaymath}
+\begin{array}{rcl}
+(\iter f\ x)@(\cons \false\ j) & = & f^(\ord{\cons \false\ j}) x \\
+\ev @j & = & f^{2\ord{j}+2}
+\end{array}
+\end{displaymath}
+
+\end{proof}
+
+Now, when $a = \true$, $(\iter f\ x)@(\cons \true\ d) = (\oddFrom f\ (f x)\ \ev)@d$.
+By the lemma, this is just $f^{2\ord{d}+1}x = f^{\ord{b}}x$
+
+When $a = \false$, 
+
+\begin{displaymath}
+\begin{array}{rcl}
+(\iter f\ x)@(\cons \false\ d) & = & (\fmap f\ \od)@d \\
+& = & f(\od @d) \\
+& = & f((\oddFrom f\ (f x)\ \ev)@d) \\
+& = & f(f^{2\ord{d}+1}x) \\
+\end{array}
+\end{displaymath}
+
+With the last step justified by the lemma. This is just $f^{2\ord{d}+2}x = f^{\ord{\cons \false\ d}}x = f^{\ord{b}}x$.
+
+\end{proof}
+
+\bibliographystyle{plain}
+\bibliography{braun}
+
+\end{document}
