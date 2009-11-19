@@ -1,8 +1,5 @@
 \documentclass{article}
-\author{Jim Apple}
-%\usepackage{graphics,graphicx,epsfig,verbatim,times}
 \usepackage{amsthm}
-%\usepackage{pstricks}
 \usepackage{amssymb,amsmath,algorithmic,algorithm,verbatim,alltt}
 
 \DeclareMathOperator{\oddFrom}{oddFromEven}
@@ -19,7 +16,6 @@
 \DeclareMathOperator{\ev}{ev}
 \DeclareMathOperator{\od}{od}
 %\renewcommand{\algorithmiccomment}[1]{// #1}
-%\DeclareMathOperator{\lag}{\log}
 
 %\begin{comment}
 \newtheorem{theorem}{Theorem}
@@ -33,8 +29,6 @@
 %\theoremstyle{definition}
 \newtheorem{definition}{Definition}
 
-
-
 %\end{comment}
 
 \begin{document}
@@ -42,13 +36,6 @@
 \title{A linear-time iterate for Braun streams and its verified proof of correctness}
 
 \author{Jim Apple}
-%\institute{Department of Computer Science, UC Davis\\
-%\{apple, gusfield, balaji\}@cs.ucdavis.edu \and
-%Department of Mathematics and Computer Science, Lehman College,\\
-%and Department of Computer Science, Graduate Center,\\
-%  City University of New York.\\
-%stjohn@lehman.cuny.edu
-%}
 
 \maketitle
 
@@ -74,11 +61,30 @@ iterate f x =
         od = oddFromEven f (f x) ev
     in
       Stream x od ev
+
+bat :: Stream a -> [Bool] -> a
+bat (Stream h _ _) [] = h
+bat (Stream _ o _) (True:r) = bat o r
+bat (Stream _ _ e) (False:r) = bat e r
+
+ord :: [Bool] -> Integer
+ord [] = 0
+ord (True:r) = 1 + 2*(ord r)
+ord (False:r) = 2 + 2*(ord r)
+
+head :: Stream a -> a
+head (Stream h _ _) = h
+
+odds :: Stream a -> Stream a
+odds (Stream _ o _) = o
+
+evens :: Stream a -> Stream a
+evens (Stream _ _ e) = e
 \end{alltt}
 
 \section{The proof}
 
-\begin{lemma}
+\begin{lemma}\label{oddFromLemma}
 For any $f, b, x, e, k$
 if
 \begin{displaymath}
@@ -164,7 +170,7 @@ f((\odds e)@d) & = & f(e@(\cons \true d)) & = & f(f^{2^k\ord{\cons \true d}+2^{k
 
 \end{proof}
 
-\begin{corollary}
+\begin{corollary}\label{oddFromCorollary}
 For any $f, b, x, e$
 if
 \begin{displaymath}
@@ -177,7 +183,7 @@ then
 \end{corollary}
 \qed
 
-\begin{theorem}
+\begin{theorem}\label{iterateCorrect}
 \begin{displaymath}
 \forall f\ x\ b, (\iter f\ x)@b = f^\ord{b} x
 \end{displaymath}
@@ -189,7 +195,7 @@ If $b = \nil$, the equality is trivial.
 Otherwise, let $b = \cons a\ d$.
 There is a lemma that is needed whether $a$ is $\true$ or $\false$
 
-\begin{lemma}
+\begin{lemma}\label{iterateSublemma}
 \begin{displaymath}
 (\oddFrom f\ (f x)\ \ev)@d = f^{2\ord{d}+1}x
 \end{displaymath}
@@ -212,7 +218,7 @@ Since $\ord{j} < \ord{d}$, $2\ord{j}+2 < 2\ord{d}+2 <= \ord{b}$, so we can apply
 \end{proof}
 
 Now, when $a = \true$, $(\iter f\ x)@(\cons \true\ d) = (\oddFrom f\ (f x)\ \ev)@d$.
-By the lemma, this is just $f^{2\ord{d}+1}x = f^{\ord{b}}x$
+By lemma~\ref{iterateSublemma}, this is just $f^{2\ord{d}+1}x = f^{\ord{b}}x$
 
 When $a = \false$, 
 
@@ -225,7 +231,7 @@ When $a = \false$,
 \end{array}
 \end{displaymath}
 
-With the last step justified by the lemma. This is just $f^{2\ord{d}+2}x = f^{\ord{\cons \false\ d}}x = f^{\ord{b}}x$.
+With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\ord{d}+2}x = f^{\ord{\cons \false\ d}}x = f^{\ord{b}}x$.
 
 \end{proof}
 
