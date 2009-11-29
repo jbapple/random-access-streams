@@ -13,9 +13,33 @@ Require Import Recdef.
 
 Section type.
 
+CoInductive CoList (A:Set) : Set :=
+| Nil : CoList A
+| Cons : A -> CoList A -> CoList A.
+
+Inductive FiniteCoList (A:Set) : CoList A -> nat -> Prop :=
+| FiniteNil : FiniteCoList (Nil A) 0
+| FiniteCons : forall hed tyl n, 
+  FiniteCoList tyl n
+  -> FiniteCoList (Cons hed tyl) (S n).
+
+CoInductive InfiniteCoList (A:Set) : CoList A -> Prop :=
+| InfiniteCons : forall hed tyl,
+  InfiniteCoList tyl -> InfiniteCoList (Cons hed tyl).
+
+CoInductive Stream (A:Set) : Set :=
+| More : A -> Stream A -> Stream A.
+
+CoFixpoint streamCycle (A:Set) (x:A) (xs:CoList A) (rest:CoList A)
+  : Stream A :=
+  match rest with
+    | Nil => More x (streamCycle x xs xs)
+    | Cons y ys => More y (streamCycle x xs ys)
+  end.
+
+
 CoInductive Braun (A:Set) : Set :=
 | Conb : A -> Braun A -> Braun A -> Braun A.
-
 
 Definition frobb n (x:Braun n) : Braun n :=
   match x with
@@ -59,19 +83,6 @@ Variable iterp :
     applyn (ord b) f x
     = bat (iterate f x) b.
 
-CoInductive CoList (A:Set) : Set :=
-| Nil : CoList A
-| Cons : A -> CoList A -> CoList A.
-
-Inductive FiniteCoList (A:Set) : CoList A -> nat -> Prop :=
-| FiniteNil : FiniteCoList (Nil A) 0
-| FiniteCons : forall hed tyl n, 
-  FiniteCoList tyl n
-  -> FiniteCoList (Cons hed tyl) (S n).
-
-CoInductive InfiniteCoList (A:Set) : CoList A -> Prop :=
-| InfiniteCons : forall hed tyl,
-  InfiniteCoList tyl -> InfiniteCoList (Cons hed tyl).
 
 CoFixpoint repcl (A:Set) (x:A) :=
   Cons x (repcl x).
@@ -517,6 +528,28 @@ Defined.
 
 Check mymod_equation.
 
+Lemma mymodUnder : forall x y, x < y -> mymod x y = x.
+  clear; induction x; induction y; intros.
+  inversion H.
+  rewrite mymod_equation.
+  remember (nat_compare 0 (S y)).
+  destruct c.
+  auto. auto.
+  inversion Heqc.
+  omega.
+  rewrite mymod_equation.
+  Locate "_ - _".
+Admitted.
+
+
+Lemma mymodUnderMe : forall x y, mymod x y <= x.
+Admitted.
+
+
+Lemma mymodUnderYou : forall x y, mymod x (S y) < (S y).
+Admitted.
+
+  
 
 (*
 Program Definition mymod (m:nat) (n:nat) :=
@@ -696,12 +729,247 @@ Definition action
        end)
     | inr (v,rem,sofar) =>
       match rem with
-        | Nil => inl _ (sofar,sofar,memo sofar)
+        | Nil => inl _ (S sofar,S sofar,memo (S sofar))
         | Cons hed tl => inr _ (hed,tl,sofar+1)
       end
   end.
 
+Definition BackAll f m n :=
+  forall j, match f (mymod j m, myincr j m) with
+              | None => j >= n
+              | Some k => k <= j
+            end.
+
 Check applyn.
+
+Locate "_ && _".
+
+Lemma BackAllAction :
+  forall (A:Set) (x:A) xs n,
+  match applyn n (@action A) (inr _ (x,xs,0)) with
+    | inl (r,m,f) => and (n = r) (and (r >= m) (BackAll f m r))
+    | inr (y,ys,m) => m = n
+  end.
+Proof.
+  clear; induction n.
+  simpl. auto.
+  intros.
+  remember (applyn n (@action _) (inr _ (x,xs,0))) as s.
+  destruct s.
+  destruct p.
+  destruct p.
+  destruct IHn.
+  destruct H0.
+  simpl.
+  rewrite <- Heqs.
+  simpl. split.
+  omega.
+  split.
+  auto with arith.
+  remember (o (mymod n0 n1, myincr n0 n1)) as p.
+  destruct p.
+  unfold BackAll in *; intros.
+  remember (o (mymod j n1, myincr j n1)) as q.
+  destruct q;
+    remember (lt_eq_lt_dec  j (n0)) as jn;
+      destruct jn.
+  destruct s.
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  apply H1.
+  rewrite <- Heqq in H2.
+  auto.
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  apply H1.
+  rewrite <- Heqq in H2.
+  auto.
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  apply H1.
+  rewrite <- Heqq in H2.
+  auto.
+  destruct s.
+  
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  apply H1.
+  rewrite <- Heqq in H2.
+  auto with arith.
+  omega.
+  clear Heqjn.
+  subst.
+  rewrite <- Heqq in Heqp.
+  inversion Heqp.
+  auto with arith.
+  omega.
+  unfold BackAll in *.
+  intros.
+  subst.
+  remember (lt_eq_lt_dec (mymod j n1) (mymod n0 n1)) as jn0.
+  destruct jn0.
+  destruct s.
+  unfold nat_compare.
+  rewrite <- Heqjn0.
+  remember (o (mymod j n1, myincr j n1)) as oj.
+  destruct oj.
+  
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  apply H1.
+  rewrite <- Heqoj in H.
+  auto.
+  assert (j >= n0).
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  
+  apply H1.
+  rewrite <- Heqoj in H.
+  auto.
+  destruct H.
+  inversion l.
+  omega.
+  omega. omega.
+  unfold nat_compare.
+  rewrite <- Heqjn0.
+  remember (lt_eq_lt_dec (myincr j n1) (myincr n0 n1)) as jn0.
+  destruct jn0.
+  destruct s.
+  remember (o (mymod j n1, myincr j n1)) as oj.
+  destruct oj.
+  
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  apply H1.
+  rewrite <- Heqoj in H.
+  auto.
+  assert (j >= n0).
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  
+  apply H1.
+  rewrite <- Heqoj in H.
+  auto.
+  destruct H.
+  inversion l.
+  omega. omega. omega.
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  
+  apply H1.
+  rewrite e in H.
+  rewrite e0 in H.
+  rewrite <- Heqp in H.
+  auto.
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  
+  apply H1.
+  remember (o (mymod j n1, myincr j n1)) as oj.
+  destruct oj.
+  auto. auto with arith.
+  destruct H.
+  inversion l. omega. omega. omega.
+  unfold nat_compare.
+  rewrite <- Heqjn0.
+  assert (match o (mymod j n1, myincr j n1) with
+            | Some k => k <= j
+            | None => j >= n0
+          end).
+  
+  apply H1.
+  remember (o (mymod j n1, myincr j n1)) as oj.
+  destruct oj.
+  auto. auto with arith.
+  destruct H.
+  inversion l. omega. omega. omega.
+  simpl in IHn.
+  destruct p.
+  destruct p.
+  subst.
+  simpl.
+  rewrite <- Heqs.
+  simpl.
+  destruct c. split. auto. split. auto.
+  Print memo.
+  unfold BackAll.
+  unfold memo.
+  intros.
+  remember (lt_eq_lt_dec (mymod j (S n)) (S n)) as jsn.
+  destruct jsn.
+  destruct s.
+  unfold nat_compare.
+  rewrite <- Heqjsn.
+  remember (lt_eq_lt_dec (myincr j (S n)) (myincr (mymod j (S n)) (S n))) as jj.
+  destruct jj.
+  destruct s.
+  remember (lt_eq_lt_dec j (S n)) as jsn.
+  destruct jsn.
+  destruct s.
+  assert ((mymod j (S n)) = j).
+  apply mymodUnder. auto.
+  inversion l0.
+  rewrite H in H1.
+  omega.
+  rewrite H in H0.
+  rewrite <- H0 in H1.
+  omega.
+  auto.
+  auto with arith.
+  omega.
+  omega.
+  apply mymodUnderMe.
+  remember (lt_eq_lt_dec j (S n)) as jsn.
+  destruct jsn.
+  destruct s.
+  
+  assert (mymod j (S n) = j).
+  apply mymodUnder.
+  auto.
+  inversion l0.
+  rewrite H in H1.
+  omega.
+  rewrite H in H1.
+  rewrite <- H0 in H1.
+  omega.
+  auto.
+  omega.
+  omega.
+  unfold nat_compare.
+  rewrite <- Heqjsn.
+  assert (mymod j (S n) < (S n)).
+  apply mymodUnderYou.
+  omega.
+  unfold nat_compare.
+  rewrite <- Heqjsn.
+  assert (mymod j (S n) < (S n)).
+  apply mymodUnderYou.
+  omega.
+  auto.
+  auto with arith.
+  omega.
+Qed.
+
 
 Lemma actionless :
   let P n := forall (A:Set) (x:A) xs,
