@@ -606,33 +606,40 @@ Proof.
   destruct a; simpl; omega.
 Qed.
 
+Lemma powMono :
+  forall x y, x <= y -> pow 2 x <= pow 2 y.
+Proof.
+  clear.
+  intros.
+  induction H. auto.
+  unfold pow; fold (pow 2 x); fold (pow 2 m). omega.
+Qed.
+
+
 Lemma ordLength :
   forall a b, ord a < ord b ->
     length a <= length b.
 Proof.
-  clear. 
-  dependent induction a.
-  dependent induction b.
-  simpl in *; try omega.
-  simpl in *; try omega.
-  simpl in *; try omega.
+  clear.
   intros.
-  destruct a; simpl.
-  
-double induction a b; simpl; intros; try omega.
-  destruct a1; destruct a2; simpl in *; try omega.
-  clear l H H0 H1.
+  remember (lt_eq_lt_dec (length a) (length b)) as ll.
+  destruct ll as [[alb|aeb]|bla]; try omega.
+  clear Heqll.
+  assert (ord b < ord a).
+  assert (S (ord b) < pow 2 (S (length b))); try apply ordLengthMax.
+  assert (pow 2 (length a) <= S (ord a)); try apply ordLengthMin.
+  assert (pow 2 (S (length b)) <= pow 2 (length a)).
+  apply powMono. omega. omega. omega.
+Qed.
 
-  clear; induction a; induction b; simpl in *; try omega.
-  destruct a; simpl in H; inversion H.
-  destruct a; simpl in H.
-  destruct a1; simpl in H.
-  assert (length a0 <= length b) as I.
-  apply IHa.
-  omega.
-  omega.
-  
-
+Lemma multLess :
+  forall a b c,
+    a <= b -> a*c <= b*c.
+Proof.
+  clear; intros.
+  induction H. auto.
+  simpl. omega.
+Qed.
 
 Lemma ordAppend :
   forall d b c,
@@ -645,261 +652,17 @@ Proof.
   apply IHd.
   rewrite ordAppendOne.
   rewrite ordAppendOne.
-  assert (length b <= length c)
+  assert (length b <= length c); try apply ordLength; auto.
+  assert (pow 2 (length b) <= pow 2 (length c)). eapply powMono. auto.
+  assert (pow 2 (length b) * ord (a::nil) <= pow 2 (length c) * ord (a::nil)).
+  apply multLess. auto.
   omega.
-  Focus 2.
   rewrite appnil in H0.
   rewrite appnil in H0.
   apply H0.
-  clear d IHd.
-  
-  induction b.
-  simpl. inversion H.
-  destruct c. inversion H1.
-  destruct b; destruct c.
-  simpl. destruct a; omega.
-  destruct b; destruct H1; try omega.
-  simpl; destruct a; omega.
-  simpl; destruct a; omega.
-  simpl in H1. omega.
-  destruct b; simpl in H1; omega.
-  simpl in *.
-  induction c; destruct a; simpl in *; try omega.
-  destruct a0; try omega.
-  destruct c; simpl; try omega.
-  destruct b; simpl; try omega.
-  destruct a0; simpl; try omega.
-  destruct c; simpl; try omega.
-  destruct b; simpl; try omega.
-  destruct c; simpl; try omega.
-  destruct b; simpl; try omega.
-  simpl.
-  destruct a0; simpl in *.
+Qed.
 
-
-  destruct (lt_eq_lt_dec (ord (b ++ a :: nil)) (ord (c ++ a :: nil))).
-  destruct s.
-  auto.
-  assert (b ++ a :: nil = c ++ a :: nil).
-  rewrite <- unt.
-  rewrite <- (unt (b ++ a :: nil)).
-  f_equal. auto.
-  assert (b = c).
-  clear H e.
-  Focus 2.
-  subst. omega.
-  Focus 2.
-  generalize dependent c.
-  generalize dependent a.
-  induction b; intros.
-  simpl in *.
-  generalize dependent a.
-  generalize dependent H.
-  induction c; intros.
-  inversion H.
-  destruct a0; destruct a; simpl in *; try omega.
-  destruct c; simpl in *; try omega.
-  destruct b; simpl in *; try omega.
-  
-  simpl in *.
-  
-  
-  destruct b; destruct c; auto.
-  des
-  induction b; induction c; auto.
-  inversion H0. destruct c; inversion H2.
-  inversion H0. destruct b; inversion H2.
-  simpl in H0.
-  inversion H0. subst.
-  f_equal.
-  
-  ssimpl_list.
-  omega.
-  
-
-
-  generalize dependent a.
-  generalize dependent b.
-  generalize dependent c.
-  
-  induction c; induction b; intros; simpl.
-  inversion H.
-  inversion H.
-  destruct a; destruct a0.
-  destruct c. simpl. omega.
-  destruct b; simpl; omega.
-  destruct c. simpl. omega.
-  destruct b; simpl; omega.
-  omega.
-  destruct c. simpl. omega.
-  destruct b; simpl; omega.
-  destruct a0; destruct a; simpl in *.
-  assert (ord (b ++ a1 :: nil) < ord (c ++ a1 :: nil)).
-  eapply IHc. omega.
-  omega.
-  destruct (lt_eq_lt_dec (ord b) (ord c)).
-  destruct s.
-  assert (ord (b ++ a1 :: nil) < ord (c ++ a1 :: nil)).
-  eapply IHc. omega.
-  omega.
-  assert (b = c).
-  rewrite <- (unt c).
-  rewrite <- (unt b).
-  f_equal. auto. subst. omega.
-  omega.
-  destruct (lt_eq_lt_dec (S (ord b)) (ord c)).
-  destruct s.
-  
-
-  Check unt.
-  rewrite <- unt in e.
-  rewrite <- tun in e.
-
-  Check lt_eq_lt_dec.
-  destruct (
-  assert (ord b <= ord c)
-  
-
-
-  double induction b c; intros; simpl.
-  inversion H.
-  inversion H0.
-  destruct a1; destruct a0.
-  destruct l0.
-  simpl. omega.
-  destruct b0; simpl; omega.
-  omega.
-  destruct l0.
-  simpl. omega.
-  destruct b0.
-  simpl. omega.
-  simpl. omega.
-  destruct l0.
-  simpl. omega.
-  destruct b0; simpl; omega.
-  destruct a0; destruct a1.
-  omega.
-  s
-
-
-Admitted.
-(*
-
-  clear.
-  intros d b c.
-  generalize dependent d.
-  generalize dependent c.
-  generalize dependent b.
-  induction b; induction c; intros.
-  inversion H.
-  destruct a; induction c; simpl.
-  omega.
-  destruct a.
-  destruct b. simpl
-  simpl.
-  simpl; auto.
-  auto.
-  double induction b c; intros.
-  inversion H.
-  simpl.
-  pose (H d).
-  destruct l.
-  simpl.
-  destruct a; omega.
-  assert (ord nil < ord (b0 :: l)).
-  destruct b0; simpl; omega.
-  apply l0 in H1.
-  destruct a.
-  assert (nil ++ d = d). simpl; auto.
-  rewrite H2 in H1.
-  omega.
-  assert (nil ++ d = d). simpl; auto.
-  rewrite H2 in H1.
-  omega.
-  inversion H1.
-  pose (H0 H).
-  clear H1.
-  
-  destruct a0; destruct a1; simpl.clear H0
-
-  destruct a
-  rewrite appnil.
-
-
-  induction b; induction c; ssimpl_list.
-  inversion H.
-  simpl. destruct a; destruct a0.
-  Focus 5.
-  inversion H.
-  Focus 5.
-  destruct a0; destruct a1; simpl.
-  
-  
-  simpl in H0.
-  
-  ssimpl_list in H0.
-
-
-  clear.
-  assert (let P l := forall e b c,
-    length e <= l -> ord b < ord c -> ord (b++e) < ord (c++e)
-  in forall l, P l).
-  intros.
-  apply lt_wf_ind.
-  intros.
-  unfold P in *.
-  clear P. intros.
-  destruct n.
-  induction e; inversion H0.
-  ssimpl_list; auto.
-  induction e.
-  ssimpl_list; auto.
-  assert (ord ((b ++ a::nil)++e) < ord ((c ++ a::nil)++e)).
-  eapply H.
-  assert (n < S n).
-  auto with arith. apply H2.
-  simpl in H0.
-  omega.
-  eapply H.
-  assert (n < S n).
-  auto with arith. apply H2.
-
-
-  exists n.
-  rewrite H.
-  induction l; simpl; intros.
-  
-  intro d.
-  remember (length d) as ld.
-  generalize dependent d.
-(*
-  generalize dependent ld.
-*)
-  Check (@lt_wf_ind ld).
-  Check lt_wf_ind 
-  eapply lt_wf_ind.
-  *)
-  (*
-  induction ld; simpl; intros.
-  destruct d; inversion Heqld.
-  ssimpl_list. auto.
-  destruct d; inversion Heqld; clear Heqld.
-  assert (ord ((b ++ a::nil)++d) < ord ((c ++ a::nil)++d)).
-  apply IHd. apply IHd.
-  ssimpl_list.
-
-  clear; induction b; induction c; induction d; simpl in *; intros; auto.
-  inversion H.
-  destruct a; auto with arith.
-  destruct a; destruct a0. 
-  induction c.
-  simpl. omega.
-  destruct a. simpl. 
-
-  unfold ord. simpl. destruct a. auto with arith.
-  auto with arith.
-  *)
-
+Print Assumptions ordAppend.
 
 Function find (A:Set) (x:BraunRef A) (p:WellBraun x) (b:list bool) 
   {measure ord b} : A :=
@@ -923,6 +686,8 @@ subst.
 apply ordAppend.
 rewrite tun. auto.
 Defined.
+
+Print Assumptions find.
 
 (*
 
