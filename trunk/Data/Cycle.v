@@ -193,6 +193,84 @@ Fixpoint concrete A (b:BraunRef A) (l:list bool) : Prop :=
 
 Variable riterate: forall (A:Set), (A->A) -> A -> BraunRef A.
 
+Fixpoint upto' A (x:BraunRef A) r b :=
+  match b with
+    | nil => (x,(rev r,nil))
+    | c::d => 
+      match x with
+        | Conr h o e =>
+          match c with
+            | true  => upto' o (c::r) d
+            | false => upto' e (c::r) d
+          end
+        | Ref v => (x,(rev r,b))
+      end
+  end.
+
+Definition upto A x b := @upto' A x nil b.
+
+Require Import List.
+
+Lemma appnil :
+  forall A x (y:A) z,
+    (x ++ y::nil)++z = x ++ y::z.
+Proof.
+  clear; induction x; intros.
+  simpl. auto.
+  simpl.
+  erewrite IHx. auto.
+Qed.
+
+Lemma revapp :
+  forall A y (x:A) z,
+    rev (x :: y) ++ z = rev y ++ x::z.
+Proof.
+  clear; induction y; intros.
+  simpl. auto.
+  simpl.
+  erewrite <- IHy.
+  rewrite appnil. auto.
+Qed.
+
+Lemma uptoAppend :
+  forall A b c x, 
+    let (_,ht) := @upto' A x c b in
+      let (hed,tyl) := ht in
+        hed++tyl = (rev c)++b.
+Proof.
+  clear.
+  intros.
+  remember (upto' x c b) as uxb.
+  destruct uxb.
+  destruct p.
+
+  generalize dependent l0.
+  generalize dependent x.
+  generalize dependent b0.
+  generalize dependent c.
+  generalize dependent b.
+  induction l; induction b; destruct x; intros; unfold upto in Hequxb; unfold upto' in Hequxb; simpl in *; inversion Hequxb; auto.
+  fold (upto' x2 (a::c) b) in *.
+  fold (upto' x1 (a::c) b) in *.
+  destruct a.
+  transitivity (rev (true::c) ++ b).
+  eapply IHb. apply Hequxb.
+  apply revapp.
+  transitivity (rev (false::c) ++ b).
+  eapply IHb. apply Hequxb.
+  apply revapp.
+  fold (upto' x2 (a0::c) b) in *.
+  fold (upto' x1 (a0::c) b) in *.
+  destruct a0.
+  transitivity (rev (true::c) ++ b).
+  eapply IHb. apply Hequxb.
+  apply revapp.
+  transitivity (rev (false::c) ++ b).
+  eapply IHb. apply Hequxb.
+  apply revapp.
+Qed.
+
+(*
 Fixpoint rbat (A:Set) (x:BraunRef A) (b:list bool) {struct b} 
   : option (A + nat) :=
   match x with
@@ -208,7 +286,7 @@ Fixpoint rbat (A:Set) (x:BraunRef A) (b:list bool) {struct b}
         | _ => None
       end
   end.
-
+*)
 Fixpoint evenp (n:nat) : nat+nat :=
   match n with
     | 0 => inl _ 0
@@ -426,15 +504,425 @@ Qed.
 
 Definition WellBraun A (x:BraunRef A) :=
   forall b,
-    match rbat x b with
-      | None => True
+    let (res,ht) := upto x b in
+      let (hed,tyl) := ht in 
+        match res with
+          | Ref v => v < (ord hed)
+          | _ => True
+        end.
+(*
+      | ( => True
       | Some (inl _) => True
-      | Some (inr n) => 
+      | Some (inr n) => n < (ord b) (*
         match rbat x (unord n) with
           | Some (inl _) => True
           | _ => False
-        end
+        end *)
     end.
+*)
+Print BraunRef.
+
+Print rev.
+
+Locate "_ ++ _".
+(*
+Print rbat.
+
+Lemma uptorbat : 
+  forall A b (x:BraunRef A),
+    match rbat x b with
+      | None => exists t, exists v, upto x b = (Ref _ v, t)
+      | Some (inl h) => exists o, exists e, upto x b = (Conr h o e, nil)
+        =>(Ref= Some (inr _ v) <-> exists t, upto x b = (Ref _ v, t).
+Proof.
+  clear; induction b; intros.
+  simpl. split; intros.
+  destruct x.
+  inversion H.
+  inversion H. exists nil. auto.
+  destruct H. inversion H. auto.
+  destruct a; split; intros;  destruct x.
+  apply (IHb x1 v); auto.
+  inversion H. 
+  apply (IHb x1 v); auto.
+  destruct H; inversion H; subst; clear H.
+  transitivity (rbat (Ref A v) nil).
+  simpl.
+  eapply (IHb (Ref A v)
+*)  
+  
+
+Fixpoint pow x y :=
+  match y with
+    | 0 => 1
+    | S z => x * pow x z
+  end.
+
+Eval compute in ord(unord 4 ++ true :: nil).
+Eval compute in ord(unord 40 ++ true :: nil).
+Eval compute in ord(unord 6 ++ true :: nil).
+Eval compute in ord(unord 8 ++ true :: nil).
+Eval compute in unord 8.
+Eval compute in length(unord 40).
+Eval compute in length(unord 38).
+Eval compute in ord(unord 38 ++ true :: nil).
+Eval compute in length(unord 5).
+Eval compute in ord(unord 5 ++ true :: nil).
+Eval compute in 
+  let f a b :=
+    (ord (unord a ++ b::nil),
+      a + pow 2 (length (unord a)) + if b then 0 else a)
+    in 
+    f 0 true :: f 1 true :: f 2 true :: f 3 true :: f 4 true  ::
+    f 0 false :: f 1 false :: f 2 false :: f 3 false :: f 4 false ::
+    nil.
+
+Lemma ordAppendOne :
+  forall a b, ord (a ++ b::nil) = 
+    ord a 
+    + pow 2 (length a) * ord (b::nil).
+Proof.
+  clear.
+  induction a; intros.
+  simpl. destruct b; auto.
+  simpl. destruct a; destruct b; simpl; try rewrite IHa; simpl; try omega.
+Qed.
+  
+Lemma ordLengthMax :
+  forall a, S (ord a) < pow 2 (S (length a)).
+Proof.
+  clear; induction a; simpl.
+  omega.
+  destruct a; simpl.
+  unfold pow in IHa; fold (pow 2 (length a0)) in *; try omega.
+  unfold pow in IHa; fold (pow 2 (length a0)) in *; try omega.
+Qed.
+
+Lemma ordLengthMin :
+  forall a, S (ord a) >= pow 2 (length a).
+Proof.
+  clear; induction a; simpl.
+  omega.
+  destruct a; simpl; omega.
+Qed.
+
+Lemma ordLength :
+  forall a b, ord a < ord b ->
+    length a <= length b.
+Proof.
+  clear. 
+  dependent induction a.
+  dependent induction b.
+  simpl in *; try omega.
+  simpl in *; try omega.
+  simpl in *; try omega.
+  intros.
+  destruct a; simpl.
+  
+double induction a b; simpl; intros; try omega.
+  destruct a1; destruct a2; simpl in *; try omega.
+  clear l H H0 H1.
+
+  clear; induction a; induction b; simpl in *; try omega.
+  destruct a; simpl in H; inversion H.
+  destruct a; simpl in H.
+  destruct a1; simpl in H.
+  assert (length a0 <= length b) as I.
+  apply IHa.
+  omega.
+  omega.
+  
+
+
+Lemma ordAppend :
+  forall d b c,
+    ord b < ord c -> ord (b ++ d) < ord (c ++ d).
+Proof.
+  clear.
+  induction d; simpl; intros.
+  ssimpl_list; auto.
+  assert (ord ((b ++ a::nil)++d) < ord ((c ++ a::nil)++d)).
+  apply IHd.
+  rewrite ordAppendOne.
+  rewrite ordAppendOne.
+  assert (length b <= length c)
+  omega.
+  Focus 2.
+  rewrite appnil in H0.
+  rewrite appnil in H0.
+  apply H0.
+  clear d IHd.
+  
+  induction b.
+  simpl. inversion H.
+  destruct c. inversion H1.
+  destruct b; destruct c.
+  simpl. destruct a; omega.
+  destruct b; destruct H1; try omega.
+  simpl; destruct a; omega.
+  simpl; destruct a; omega.
+  simpl in H1. omega.
+  destruct b; simpl in H1; omega.
+  simpl in *.
+  induction c; destruct a; simpl in *; try omega.
+  destruct a0; try omega.
+  destruct c; simpl; try omega.
+  destruct b; simpl; try omega.
+  destruct a0; simpl; try omega.
+  destruct c; simpl; try omega.
+  destruct b; simpl; try omega.
+  destruct c; simpl; try omega.
+  destruct b; simpl; try omega.
+  simpl.
+  destruct a0; simpl in *.
+
+
+  destruct (lt_eq_lt_dec (ord (b ++ a :: nil)) (ord (c ++ a :: nil))).
+  destruct s.
+  auto.
+  assert (b ++ a :: nil = c ++ a :: nil).
+  rewrite <- unt.
+  rewrite <- (unt (b ++ a :: nil)).
+  f_equal. auto.
+  assert (b = c).
+  clear H e.
+  Focus 2.
+  subst. omega.
+  Focus 2.
+  generalize dependent c.
+  generalize dependent a.
+  induction b; intros.
+  simpl in *.
+  generalize dependent a.
+  generalize dependent H.
+  induction c; intros.
+  inversion H.
+  destruct a0; destruct a; simpl in *; try omega.
+  destruct c; simpl in *; try omega.
+  destruct b; simpl in *; try omega.
+  
+  simpl in *.
+  
+  
+  destruct b; destruct c; auto.
+  des
+  induction b; induction c; auto.
+  inversion H0. destruct c; inversion H2.
+  inversion H0. destruct b; inversion H2.
+  simpl in H0.
+  inversion H0. subst.
+  f_equal.
+  
+  ssimpl_list.
+  omega.
+  
+
+
+  generalize dependent a.
+  generalize dependent b.
+  generalize dependent c.
+  
+  induction c; induction b; intros; simpl.
+  inversion H.
+  inversion H.
+  destruct a; destruct a0.
+  destruct c. simpl. omega.
+  destruct b; simpl; omega.
+  destruct c. simpl. omega.
+  destruct b; simpl; omega.
+  omega.
+  destruct c. simpl. omega.
+  destruct b; simpl; omega.
+  destruct a0; destruct a; simpl in *.
+  assert (ord (b ++ a1 :: nil) < ord (c ++ a1 :: nil)).
+  eapply IHc. omega.
+  omega.
+  destruct (lt_eq_lt_dec (ord b) (ord c)).
+  destruct s.
+  assert (ord (b ++ a1 :: nil) < ord (c ++ a1 :: nil)).
+  eapply IHc. omega.
+  omega.
+  assert (b = c).
+  rewrite <- (unt c).
+  rewrite <- (unt b).
+  f_equal. auto. subst. omega.
+  omega.
+  destruct (lt_eq_lt_dec (S (ord b)) (ord c)).
+  destruct s.
+  
+
+  Check unt.
+  rewrite <- unt in e.
+  rewrite <- tun in e.
+
+  Check lt_eq_lt_dec.
+  destruct (
+  assert (ord b <= ord c)
+  
+
+
+  double induction b c; intros; simpl.
+  inversion H.
+  inversion H0.
+  destruct a1; destruct a0.
+  destruct l0.
+  simpl. omega.
+  destruct b0; simpl; omega.
+  omega.
+  destruct l0.
+  simpl. omega.
+  destruct b0.
+  simpl. omega.
+  simpl. omega.
+  destruct l0.
+  simpl. omega.
+  destruct b0; simpl; omega.
+  destruct a0; destruct a1.
+  omega.
+  s
+
+
+Admitted.
+(*
+
+  clear.
+  intros d b c.
+  generalize dependent d.
+  generalize dependent c.
+  generalize dependent b.
+  induction b; induction c; intros.
+  inversion H.
+  destruct a; induction c; simpl.
+  omega.
+  destruct a.
+  destruct b. simpl
+  simpl.
+  simpl; auto.
+  auto.
+  double induction b c; intros.
+  inversion H.
+  simpl.
+  pose (H d).
+  destruct l.
+  simpl.
+  destruct a; omega.
+  assert (ord nil < ord (b0 :: l)).
+  destruct b0; simpl; omega.
+  apply l0 in H1.
+  destruct a.
+  assert (nil ++ d = d). simpl; auto.
+  rewrite H2 in H1.
+  omega.
+  assert (nil ++ d = d). simpl; auto.
+  rewrite H2 in H1.
+  omega.
+  inversion H1.
+  pose (H0 H).
+  clear H1.
+  
+  destruct a0; destruct a1; simpl.clear H0
+
+  destruct a
+  rewrite appnil.
+
+
+  induction b; induction c; ssimpl_list.
+  inversion H.
+  simpl. destruct a; destruct a0.
+  Focus 5.
+  inversion H.
+  Focus 5.
+  destruct a0; destruct a1; simpl.
+  
+  
+  simpl in H0.
+  
+  ssimpl_list in H0.
+
+
+  clear.
+  assert (let P l := forall e b c,
+    length e <= l -> ord b < ord c -> ord (b++e) < ord (c++e)
+  in forall l, P l).
+  intros.
+  apply lt_wf_ind.
+  intros.
+  unfold P in *.
+  clear P. intros.
+  destruct n.
+  induction e; inversion H0.
+  ssimpl_list; auto.
+  induction e.
+  ssimpl_list; auto.
+  assert (ord ((b ++ a::nil)++e) < ord ((c ++ a::nil)++e)).
+  eapply H.
+  assert (n < S n).
+  auto with arith. apply H2.
+  simpl in H0.
+  omega.
+  eapply H.
+  assert (n < S n).
+  auto with arith. apply H2.
+
+
+  exists n.
+  rewrite H.
+  induction l; simpl; intros.
+  
+  intro d.
+  remember (length d) as ld.
+  generalize dependent d.
+(*
+  generalize dependent ld.
+*)
+  Check (@lt_wf_ind ld).
+  Check lt_wf_ind 
+  eapply lt_wf_ind.
+  *)
+  (*
+  induction ld; simpl; intros.
+  destruct d; inversion Heqld.
+  ssimpl_list. auto.
+  destruct d; inversion Heqld; clear Heqld.
+  assert (ord ((b ++ a::nil)++d) < ord ((c ++ a::nil)++d)).
+  apply IHd. apply IHd.
+  ssimpl_list.
+
+  clear; induction b; induction c; induction d; simpl in *; intros; auto.
+  inversion H.
+  destruct a; auto with arith.
+  destruct a; destruct a0. 
+  induction c.
+  simpl. omega.
+  destruct a. simpl. 
+
+  unfold ord. simpl. destruct a. auto with arith.
+  auto with arith.
+  *)
+
+
+Function find (A:Set) (x:BraunRef A) (p:WellBraun x) (b:list bool) 
+  {measure ord b} : A :=
+  let (ans,ht) := upto x b in
+    let (hed,tyl) := ht in
+      match ans with
+        | Conr h _ _ => h
+        | Ref v => find p ((unord v)++tyl)
+      end.
+clear; intros.
+unfold WellBraun in p.
+pose (p b).
+rewrite teq in y.
+assert (hed ++ tyl = b).
+transitivity (rev nil ++ b).
+pose (@uptoAppend A b nil x) as I.
+fold (upto x b) in I.
+rewrite teq in I. auto.
+simpl. auto.
+subst.
+apply ordAppend.
+rewrite tun. auto.
+Defined.
 
 (*
 
@@ -569,12 +1057,6 @@ Print mymod.
 Print mymod.
 Print modulo.
 Check modulo.
-
-Fixpoint pow x y :=
-  match y with
-    | 0 => 1
-    | S z => x * pow x z
-  end.
 
 Fixpoint is2pow' (n:nat) i := 
   match i with
@@ -713,7 +1195,7 @@ Definition action
   match x with
     | inl (real,mod,f) => 
       inl _ 
-      (real+1,
+      (S real,
        mod,
        match f (mymod real mod,myincr real mod) with
          | Some v => f
@@ -730,7 +1212,7 @@ Definition action
     | inr (v,rem,sofar) =>
       match rem with
         | Nil => inl _ (S sofar,S sofar,memo (S sofar))
-        | Cons hed tl => inr _ (hed,tl,sofar+1)
+        | Cons hed tl => inr _ (hed,tl,S sofar)
       end
   end.
 
@@ -810,7 +1292,6 @@ Proof.
   rewrite <- Heqq in Heqp.
   inversion Heqp.
   auto with arith.
-  omega.
   unfold BackAll in *.
   intros.
   subst.
@@ -966,11 +1447,12 @@ Proof.
   apply mymodUnderYou.
   omega.
   auto.
-  auto with arith.
-  omega.
 Qed.
 
+Print Assumptions BackAllAction.
 
+Check BackAllAction.
+(*
 Lemma actionless :
   let P n := forall (A:Set) (x:A) xs,
     match applyn n (@action _) (inr _ (x,xs,0)) with
@@ -1068,6 +1550,7 @@ Check fun A => iterate (@action A).
 Definition cycle A hed tyl :=
        truncate (hed,tyl) (iterate (@action A) (inr _ (hed,tyl,0))).
 
+Check cycle.
 
 Definition bacc x y := ord x < ord y.
 
@@ -1087,19 +1570,68 @@ Proof.
   intros.
   generalize dependent A.
   assert (let P b := forall (A : Set) (x : A) (xs : CoList A),
-   match rbat (cycle x xs) b with
-   | Some (inl _) => True
-   | Some (inr n) =>
-       match rbat (cycle x xs) (unord n) with
-       | Some (inl _) => True
-       | Some (inr _) => False
-       | None => False
-       end
-   | None => True
+   let (res, ht) := upto (cycle x xs) b in
+   let (hed, _) := ht in
+   match res with
+   | Conr _ _ _ => True
+   | Ref v => v < ord hed
    end in forall b, P b).
   apply (well_founded_ind bwf).
   intros.
   unfold bacc in H.
+  remember (upto (cycle x0 xs) x) as xxx.
+  destruct xxx.
+  destruct p.
+  destruct b0.
+  auto.
+  induction x.
+  simpl in *.
+  unfold cycle in Heqxxx.
+  unfold upto in Heqxxx.
+  Check upto'.
+  unfold upto' in Heqxxx.
+  inversion Heqxxx.
+  subst.
+  Check frob.
+  Check frobeq.
+  rewrite (@frobeq A) in H1.
+  simpl in H1.
+  Check frobb.
+  Check action.
+  Check frobbeq.
+  remember ((iterate (@action _)
+             (inr (nat * nat * (nat * nat -> option nat)) (x0, xs, 0)))) as iax.
+  destruct iax.
+  destruct s.
+  destruct p.
+  destruct p.
+  remember (o (mymod n0 n1, myincr n0 n1)) as ann.
+  destruct ann.
+  inversion H1. subst. clear H1.
+
+  rewrite (@frobbeq (nat * nat * (nat * nat -> option nat) + A * CoList A * nat) (iterate (@action _)
+             (inr (nat * nat * (nat * nat -> option nat)) (x0, xs, 0)))) in H1.
+  simpl in H1.
+  Check truncate.
+  inversion Heqxxx.
+  
+  rewrite frob
+  unfold truncate in Heqxxx.
+  simpl in Heqxxx.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   induction x.
   simpl.
   remember (iterate (@action A)
