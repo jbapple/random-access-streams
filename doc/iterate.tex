@@ -1,10 +1,10 @@
-\documentclass{article}
-\usepackage{amsthm}
+\documentclass{llncs}
+%\usepackage{amsthm}
 \usepackage{amssymb,amsmath,algorithmic,algorithm,verbatim,alltt}
 
 \DeclareMathOperator{\oddFrom}{oddFromEven}
 \DeclareMathOperator{\nil}{\langle\rangle}
-\DeclareMathOperator{\cons}{cons}
+%\DeclareMathOperator{\cons}{cons}
 \DeclareMathOperator{\true}{true}
 \DeclareMathOperator{\false}{false}
 \DeclareMathOperator{\head}{head}
@@ -13,11 +13,12 @@
 \DeclareMathOperator{\fmap}{fmap}
 \DeclareMathOperator{\iter}{iterate}
 \newcommand{\ord}[1]{\|#1\|}
+\newcommand{\cons}[2]{#1:#2}
 \DeclareMathOperator{\ev}{ev}
 \DeclareMathOperator{\od}{od}
 %\renewcommand{\algorithmiccomment}[1]{// #1}
 
-%\begin{comment}
+\begin{comment}
 \newtheorem{theorem}{Theorem}
 \newtheorem{claim}[theorem]{Claim}
 \newtheorem{lemma}[theorem]{Lemma}
@@ -29,25 +30,96 @@
 %\theoremstyle{definition}
 \newtheorem{definition}{Definition}
 
-%\end{comment}
+\end{comment}
 
 \begin{document}
 
-\title{A linear-time iterate for Braun streams and its verified proof of correctness}
+\title{Building Braun streams efficiently}
 
 \author{Jim Apple}
+
+\institute{}
 
 \maketitle
 
 \section*{Abstract}
 
-\cite{HinzePat}
+Braun trees are a functional data structure with logarithmic-time indexing, update, and deque operations.\cite{hoogerwoord}
+They are mostly superseded by finger trees, which decrease to a constant the time required for deque operations.\cite{kaplan96purely,HinzePat}
+The restrictive structural constraints that give Braun trees slower deque operations than finger trees make them well-suited for operations on infinite lists, or {\em streams}.
 
-\section{The algorithm}
+This paper presents two new algorithms for building Braun streams from cons lists.
+The first algorithm builds a Braun stream from a cons stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite cons lists.\cite{okasakiBraun} 
+The second algorithm builds a cyclic Braun stream from a possibly finite list; when the list is finite and of length $n$, it builds a Braun stream that uses no more than $O(n^2)$ space, even when forced to arbitrary depth.
+In contrast, circular streams represented with finger trees use at least $O(i)$ space when forced to depth $i$.
 
+Correctness proofs of the two algorithms are presented along with formal verifications using the Coq proof assistant.
+
+\section{Introduction}
+
+To achieve these constant-time bounds, however, skew lists and finger trees relax their structural constraints. 
+This prevents some stream constructions from terminating. 
+For instance, \verb|cons| pattern matches on its second argument to determine its top-level constructor, so \verb|let ones = cons 1 ones| can never produce a top-level constructor.
+
+In addition, the complexity of the structural constraints on skew lists and finger trees increase the memory usage of certain streams.
+For instance, the stream \verb|ones| mentioned above can be stored in a Braun stream such that arbitrary indices may be retrieved without allocating more than a constant amount of memory.
+Finger trees and skew lists, on the other hand, will both allocate $O(\log i)$ memory when the $i$th element is retrieved.
+
+What does linear time mean on infinite streams?
+
+\section{Braun streams}
+
+Braun streams are simply infinite full binary trees.
+The $0$th element is stored in the root of the tree, while odd-indexed elements appear in the left subtree and even-indexed elements appear in the right.
+The subtrees of a Braun tree are also Braun trees, after reindexing by order.
+That is, the 0th entry of any subtree is at its root, and its 1st, 3rd, 5th, ... elements are in its left subtree, etc.
+
+To make this recursive relation clear, we index Braun streams by finite lists of booleans.
+The root element is indexed by the empty list.
+The odd-indexed elements are indexed by lists that start with \verb|True|, the even-indexed elements by lists that start with \verb|False|.
+There is an obvious bijection between finite lists of booleans and integers;
+it is expressed in \verb|ord| and \verb|list| in Figure~\ref{basicCode}.
+
+\begin{figure}
 \begin{alltt}
 data Stream a = Stream a (Stream a) (Stream a) 
 
+bat :: Stream a -> [Bool] -> a
+bat (Stream h _ _) [] = h
+bat (Stream _ o _) (True:r) = bat o r
+bat (Stream _ _ e) (False:r) = bat e r
+
+ord :: [Bool] -> Integer
+ord [] = 0
+ord (True:r) = 1 + 2*(ord r)
+ord (False:r) = 2 + 2*(ord r)
+
+list :: Integer -> [Bool]
+list 0 = []
+list n = 
+    case x `mod` 2 of
+      | 1 -> False:(list ((x-1)`div`2))
+      | 0 -> True:(list ((x-2)`div`2))
+
+head :: Stream a -> a
+head (Stream h _ _) = h
+
+odds :: Stream a -> Stream a
+odds (Stream _ o _) = o
+
+evens :: Stream a -> Stream a
+evens (Stream _ _ e) = e
+\end{alltt}
+\caption{The basic definitions of Braun streams with their ordering as written in Haskell.}
+\label{basicCode}
+\end{figure}
+
+\section{Building Braun streams}
+
+The algorithm for building a Braun stream from a linear stream (along with supporting code) is displayed in Figure~\ref{iterateCode}.
+
+\begin{figure}
+\begin{alltt}
 instance Functor Stream where
     fmap f (Stream p q r) = Stream (f p) (fmap f q) (fmap f r)
 
@@ -62,27 +134,22 @@ iterate f x =
     in
       Stream x od ev
 
-bat :: Stream a -> [Bool] -> a
-bat (Stream h _ _) [] = h
-bat (Stream _ o _) (True:r) = bat o r
-bat (Stream _ _ e) (False:r) = bat e r
+data LStream a = Cons a (LStream a)
 
-ord :: [Bool] -> Integer
-ord [] = 0
-ord (True:r) = 1 + 2*(ord r)
-ord (False:r) = 2 + 2*(ord r)
+ltail :: LStream a -> LStream a
+ltail (Cons _ xs) = xs
 
-head :: Stream a -> a
-head (Stream h _ _) = h
+lhead :: LStream a -> a
+lhead (Cons x _) = x
 
-odds :: Stream a -> Stream a
-odds (Stream _ o _) = o
-
-evens :: Stream a -> Stream a
-evens (Stream _ _ e) = e
+fromLStream :: LStream a -> Stream a
+fromLStream s = fmap lhead (iterate ltail s)
 \end{alltt}
+\caption{The algorithm for building a Braun stream from a linear stream in Haskell}
+\label{iterateCode}
+\end{figure}
 
-\section{The proof}
+For the proofs, \verb|ord l| is written $\ord{l}$ and \verb|bat s l| is written $s@l$.
 
 \begin{lemma}\label{oddFromLemma}
 For any $f, b, x, e, k$
@@ -102,14 +169,15 @@ We prove this by structural induction on $b$. If $b = \nil$, then
 (\oddFrom f\ (f^{2^k-1}x)\ e)@b & = & (\oddFrom f\ (f^{2^k-1}x)\ e)@\nil \\
 & = & f^{2^k-1}x \\
 & = & f^{0+2^k-1}x \\
-& = & f^{2^k\ord{\nil}+2^k-1}x
+& = & f^{2^k\ord{\nil}+2^k-1}x \\
+& = & f^{2^k\ord{b}+2^k-1}x
 \end{array}
 \end{displaymath}
 
-If $b = \cons \true d$,
+If $b = \cons{\true}{d}$,
 \begin{displaymath}
 \begin{array}{rcl}
-(\oddFrom f\ (f^{2^k-1}x)\ e)@(\cons \true d)& = & \\
+(\oddFrom f\ (f^{2^k-1}x)\ e)@(\cons{\true}{d})& = & \\
 (\oddFrom f\ (f (\head e))\ (\evens e))@d& = & \\
 (\oddFrom f\ (f (f^{2^{k+1}-2}e))\ (\evens e))@d& = & \\
 (\oddFrom f\ (f^{2^{k+1}-1}e)\ (\evens e))@d&  & 
@@ -118,15 +186,15 @@ If $b = \cons \true d$,
 
 Now, for all $g$ such that $\ord{g} < \ord{d}$, $\ord{g} \leq \ord{d}-1$, so 
 \begin{displaymath}
-\ord{\cons \false g} = 2 + 2\ord{g} \leq 2 + 2(\ord{d} -1) = 2\ord{d} < 1+2\ord{d} = \ord{\cons \true d}
+\ord{\cons{\false}{g}} = 2 + 2\ord{g} \leq 2 + 2(\ord{d} -1) = 2\ord{d} < 1+2\ord{d} = \ord{\cons{\true}{d}}
 \end{displaymath}
 
-So, $\ord{\cons \false g} < \ord{b}$, and 
+So, $\ord{\cons{\false}{g}} < \ord{b}$, and 
 \begin{displaymath}
 \begin{array}{rcccl}
-(\evens e)@g & = & e@(\cons \false g) & = & f^{2^k\ord{\cons \false g}+2^{k+1}-2}x \\
-& & & = & f^{2^k(2+2\ord{g})+2^{k+1}-2}x \\
-& & & = & f^{2^{k+1} + 2^{k+1}\ord{g}+2^{k+1}-2}x \\
+(\evens e)@g & = & e@(\cons{\false}{g}) & = & f^{2^k\ord{\cons{\false}{g}}+2^{k+1}-2}x \\
+%& & & = & f^{2^k(2+2\ord{g})+2^{k+1}-2}x \\
+%& & & = & f^{2^{k+1} + 2^{k+1}\ord{g}+2^{k+1}-2}x \\
 & & & = & f^{2^{k+1}\ord{g}+2^{k+2}-2}x 
 \end{array}
 \end{displaymath}
@@ -138,61 +206,64 @@ This implies that
 \begin{array}{rcl}
 (\oddFrom f\ (f^{2^k-1}x)\ e)@b & = & (\oddFrom f\ (f^{2^{k+1}-1}x)\ (\evens e))@d \\
 & = & f^{2^{k+1}d+2^{k+1}-1} x \\
-& = & f^{2^k2d+2^k+2^k-1} x \\
-& = & f^{2^k(2d+1)+2^k-1} x \\
-& = & f^{2^k\ord{\cons \true d}+2^k-1} x \\
+%& = & f^{2^k2d+2^k+2^k-1} x \\
+%& = & f^{2^k(2d+1)+2^k-1} x \\
+& = & f^{2^k\ord{\cons{\true}{d}}+2^k-1} x \\
 & = & f^{2^k\ord{b}+2^k-1} x
 \end{array}
 \end{displaymath}
 
-If $b = \cons \false d$,
+If $b = \cons{\false}{d}$,
 
 \begin{displaymath}
 \begin{array}{rcl}
-(\oddFrom f\ (f^{2^k-1}x)\ e)@(\cons \false d)& = & (\fmap f\ (\odds e))@d \\
+(\oddFrom f\ (f^{2^k-1}x)\ e)@(\cons{\false}{d})& = & (\fmap f\ (\odds e))@d \\
 & = & f ((\odds e)@d)
 \end{array}
 \end{displaymath}
 
 Since
-$\ord{\cons \true d} = 1+2\ord{d} < 2+2\ord{d} = \ord{\cons \true d}$,
+$\ord{\cons{\true}{d}} = 1+2\ord{d} < 2+2\ord{d} = \ord{\cons{\false}{d}}$,
 
 \begin{displaymath}
 \begin{array}{rcccl}
-f((\odds e)@d) & = & f(e@(\cons \true d)) & = & f(f^{2^k\ord{\cons \true d}+2^{k+1}-2}x) \\
-& & & = & f^{1+2^k(1+2\ord{d})+2^{k+1}-2}x \\
-& & & = & f^{2^k+2^{k+1}\ord{d}+2^{k+1}-1}x \\
-& & & = & f^{2^k(2+2\ord{d})+2^k-1}x \\
-& & & = & f^{2^k\ord{\cons \false d}+2^k-1}x \\
+f((\odds e)@d) & = & f(e@(\cons{\true}{d})) & = & f(f^{2^k\ord{\cons{\true}{d}}+2^{k+1}-2}x) \\
+%& & & = & f^{1+2^k(1+2\ord{d})+2^{k+1}-2}x \\
+%& & & = & f^{2^k+2^{k+1}\ord{d}+2^{k+1}-1}x \\
+%& & & = & f^{2^k(2+2\ord{d})+2^k-1}x \\
+& & & = & f^{2^k\ord{\cons{\false}{d}}+2^k-1}x \\
 & & & = & f^{2^k\ord{b}+2^k-1}x
 \end{array}
 \end{displaymath}
 
 \end{proof}
 
+The full strength of Lemma~\ref{oddFromLemma} is only really needed in the induction hypothesis.
+The statement we need for the main proof of \verb|iterate| fixes $k$ at $1$:
+
 \begin{corollary}\label{oddFromCorollary}
 For any $f, b, x, e$
 if
 \begin{displaymath}
-\forall j . \ord{j} < \ord{b} \implies e@j = f^{\ord{\cons \false j}}x
+\forall j . \ord{j} < \ord{b} \implies e@j = f^{\ord{\cons{\false}{j}}}x
 \end{displaymath}
 then
 \begin{displaymath}
-(\oddFrom f\ (f x)\ e)@b = f^{\ord{\cons \true b}}x
+(\oddFrom f\ (f x)\ e)@b = f^{\ord{\cons{\true}{b}}}x
 \end{displaymath}
 \end{corollary}
 \qed
 
 \begin{theorem}\label{iterateCorrect}
 \begin{displaymath}
-\forall f\ x\ b, (\iter f\ x)@b = f^\ord{b} x
+\forall f\ x\ b, (\iter f\ x)@b = f^{\ord{b}} x
 \end{displaymath}
 \end{theorem}
 \begin{proof}
 
 We proceed by well-founded induction on $\ord{b}$.
 If $b = \nil$, the equality is trivial.
-Otherwise, let $b = \cons a\ d$.
+Otherwise, let $b = \cons{a}{d}$.
 There is a lemma that is needed whether $a$ is $\true$ or $\false$
 
 \begin{lemma}\label{iterateSublemma}
@@ -206,36 +277,60 @@ This is a direct result of the corollary as long as
 \forall j, \ord{j} < \ord{d} \implies \ev @j = f^{2\ord{j}+2}
 \end{displaymath}
 
-Since $\ord{j} < \ord{d}$, $2\ord{j}+2 < 2\ord{d}+2 <= \ord{b}$, so we can apply the induction hypothesis to $2\ord{j}+2 = \ord{\cons \false\ j}$:
+Since $\ord{j} < \ord{d}$, $2\ord{j}+2 < 2\ord{d}+2 \leq \ord{b}$, we can apply the induction hypothesis to $2\ord{j}+2 = \ord{\cons{\false}{j}}$:
 
 \begin{displaymath}
 \begin{array}{rcl}
-(\iter f\ x)@(\cons \false\ j) & = & f^(\ord{\cons \false\ j}) x \\
+(\iter f\ x)@(\cons{\false}{j}) & = & f^{\ord{\cons{\false}{j}}} x \\
 \ev @j & = & f^{2\ord{j}+2}
 \end{array}
 \end{displaymath}
 
 \end{proof}
 
-Now, when $a = \true$, $(\iter f\ x)@(\cons \true\ d) = (\oddFrom f\ (f x)\ \ev)@d$.
+Now, when $a = \true$, $(\iter f\ x)@(\cons{\true}{d}) = (\oddFrom f\ (f x)\ \ev)@d$.
 By lemma~\ref{iterateSublemma}, this is just $f^{2\ord{d}+1}x = f^{\ord{b}}x$
 
 When $a = \false$, 
 
 \begin{displaymath}
 \begin{array}{rcl}
-(\iter f\ x)@(\cons \false\ d) & = & (\fmap f\ \od)@d \\
+(\iter f\ x)@(\cons{\false}{d}) & = & (\fmap f\ \od)@d \\
 & = & f(\od @d) \\
 & = & f((\oddFrom f\ (f x)\ \ev)@d) \\
 & = & f(f^{2\ord{d}+1}x) \\
 \end{array}
 \end{displaymath}
 
-With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\ord{d}+2}x = f^{\ord{\cons \false\ d}}x = f^{\ord{b}}x$.
+With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\ord{d}+2}x = f^{\ord{\cons{\false}{d}}}x = f^{\ord{b}}x$.
 
 \end{proof}
+
+\section{Formalizing the proof of correctness}
+
+how many lines?
+
+how many generated lines?
+
+hiccups:
+* subtraction
+* repeated function application not built-in (show equal to another formulation)
+* proving termination separately
+
+\section{Conclusions}
+
+Is there a data structure that provides terminating constant-time \verb|cons|?
+
+Also good for Braun trees, because can get index i in time $i$, not $n+i$
+
+Formalizing in a language with extraction
+
+Formalizing time and space complexity
 
 \bibliographystyle{plain}
 \bibliography{braun}
 
 \end{document}
+
+% LocalWords:  Braun deque Coq subtree subtrees bijection superlinear
+% LocalWords:  oddFromEven
