@@ -1,8 +1,8 @@
 # Set this to the basename of the .tex file
 # This will also be the name of the generated .dvi, .ps and .pdf files
-PAPER = iterate
+PAPER = building-braun-streams
 
-all: $(PAPER).dvi 
+all: $(PAPER).pdf
 
 # Set this to the other source files that should be counted as 
 # dependencies
