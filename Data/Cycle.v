@@ -17,6 +17,13 @@ CoInductive CoList (A:Set) : Set :=
 | Nil : CoList A
 | Cons : A -> CoList A -> CoList A.
 
+CoInductive cleq (A:Set) : CoList A -> CoList A -> Prop :=
+| nileq : cleq (@Nil _) (@Nil _)
+| conseq : forall x y xs ys,
+           x = y ->
+           cleq xs ys ->
+           cleq (Cons x xs) (Cons y ys).
+
 Inductive FiniteCoList (A:Set) : CoList A -> nat -> Prop :=
 | FiniteNil : FiniteCoList (Nil A) 0
 | FiniteCons : forall hed tyl n, 
@@ -30,13 +37,15 @@ CoInductive InfiniteCoList (A:Set) : CoList A -> Prop :=
 CoInductive Stream (A:Set) : Set :=
 | More : A -> Stream A -> Stream A.
 
-CoFixpoint streamCycle (A:Set) (x:A) (xs:CoList A) (rest:CoList A)
+CoFixpoint streamCycle' (A:Set) (x:A) (xs:CoList A) (rest:CoList A)
   : Stream A :=
   match rest with
-    | Nil => More x (streamCycle x xs xs)
-    | Cons y ys => More y (streamCycle x xs ys)
+    | Nil => More x (streamCycle' x xs xs)
+    | Cons y ys => More y (streamCycle' x xs ys)
   end.
 
+Definition streamCycle (A:Set) (x:A) (xs:CoList A) : Stream A :=
+  streamCycle' x xs (Cons x xs).
 
 CoInductive Braun (A:Set) : Set :=
 | Conb : A -> Braun A -> Braun A -> Braun A.
@@ -126,12 +135,12 @@ CoInductive BraunRef (A:Set) : Set :=
 | Conr : A -> BraunRef A -> BraunRef A -> BraunRef A
 | Ref : nat -> BraunRef A.
 
-Inductive FiniteBraun (A:Set) : BraunRef A -> list nat -> Prop :=
-| FiniteRef : forall b, FiniteBraun (Ref A b) (b::nil)
+Inductive FiniteBraun (A:Set) : BraunRef A -> nat -> Prop :=
+| FiniteRef : forall b, FiniteBraun (Ref A b) 1
 | FiniteSum : forall h o e l r, 
   FiniteBraun o l ->
   FiniteBraun e r ->
-  FiniteBraun (@Conr A h o e) (l++r).
+  FiniteBraun (@Conr A h o e) (l+r).
 
 CoInductive InfiniteBraun (A:Set) : BraunRef A -> Prop :=
 | InfiniteConr : forall h o e,
@@ -206,7 +215,24 @@ Fixpoint upto' A (x:BraunRef A) r b :=
         | Ref v => (x,(rev r,b))
       end
   end.
-
+(*
+Fixpoint uptoo A (x:BraunRef A) r b :=
+  match b with
+    | nil => 
+      match x with
+        | Conr h _ _ => inl h
+        | Ref v => inr (v,(rev r,nil))
+    | c::d => 
+      match x with
+        | Conr h o e =>
+          match c with
+            | true  => upto' o (c::r) d
+            | false => upto' e (c::r) d
+          end
+        | Ref v => (x,(rev r,b))
+      end
+  end.
+*)
 Definition upto A x b := @upto' A x nil b.
 
 Require Import List.
@@ -687,7 +713,24 @@ apply ordAppend.
 rewrite tun. auto.
 Defined.
 
+Print find.
+Print find_tcc.
+Check find_tcc.
+Check find_terminate.
+Check find_ind.
+(*
+Print find_rec
+Print find_rect
+Print R_find_correct
+Print R_find_complete
+*)
+Print find_equation.
+Check find_equation.
+
+
 Print Assumptions find.
+
+
 
 (*
 
@@ -926,15 +969,33 @@ Next Obligation.
   auto with arith.
 Defined.
 
-Eval compute in (floorlg 0).
-Eval compute in (floorlg 1).
-Eval compute in (floorlg 2).
-Eval compute in (floorlg 3).
-Eval compute in (floorlg 4).
-Eval compute in (floorlg 7).
-Eval compute in (floorlg 8).
+Function floorlg2 (x:nat) {measure id x} :nat :=
+  match div2 x with
+    | 0 => 0
+    | y => S (floorlg2 y)
+  end.
+clear; intros; destruct x.
+unfold div2 in teq; inversion teq.
+unfold id. 
+rewrite <- teq.
+apply lt_div2. 
+auto with arith.
+Defined.
 
-Definition myincr real mod := mymod (pow 2 (floorlg (S real))) mod.
+Print floorlg2_equation.
+Check floorlg2_equation.
+
+Eval compute in (floorlg2 0).
+Eval compute in (floorlg2 1).
+Eval compute in (floorlg2 2).
+Eval compute in (floorlg2 3).
+Eval compute in (floorlg2 4).
+Eval compute in (floorlg2 7).
+Eval compute in (floorlg2 8).
+
+Definition myincr real mod := mymod (pow 2 (floorlg2 (S real))) mod.
+
+Print myincr.
 
 Definition memo (n:nat) (pi : nat*nat) := 
   let (p,i) := pi in
@@ -1217,6 +1278,7 @@ Qed.
 Print Assumptions BackAllAction.
 
 Check BackAllAction.
+Print BackAll.
 (*
 Lemma actionless :
   let P n := forall (A:Set) (x:A) xs,
@@ -1288,7 +1350,25 @@ Fixpoint mat' (A:Set) (whole:A * CoList A) (rem:CoList A) (n:nat) : A :=
 
 Definition mat (A:Set) (whole:A * CoList A) (n:nat) : A :=
   mat' whole (let (hed,tyl) := whole in Cons hed tyl) n.
-
+(*
+Definition trunk (A:Set) (whole:A * CoList A)
+  (x:((nat*nat*(nat*nat->option nat))+(A * CoList A * nat)))
+    : nat+nat :=
+    match x with 
+      | inl (real,mod,f) =>
+        match f (mymod real mod,myincr real mod) with
+          | realNone => Conr 
+            (mat whole real)
+            (truncate whole od)
+            (truncate whole ev)
+          | Some bak => Ref _ bak
+        end
+      |inr (hed, _, _) =>
+        Conr hed
+        (truncate whole od)
+        (truncate whole ev)
+    end.
+*)
 CoFixpoint truncate (A:Set) (whole:A * CoList A)
   (x:Braun ((nat*nat*(nat*nat->option nat))+(A * CoList A * nat)))
     : BraunRef A :=
@@ -1326,6 +1406,100 @@ Proof.
   apply well_founded_ltof.
 Qed.
 
+CoInductive coeq A : Braun A -> Braun A -> Prop :=
+| co : forall x y od od' ev ev',
+        (x = y) -> coeq od od' -> coeq ev ev'
+        -> coeq (Conb x od ev) (Conb y od' ev').
+
+
+Check bat.
+Check find.
+
+Definition cofull A (x:BraunRef A) (y:Braun A) :=
+  exists xp,
+    forall b,
+      @find _ x xp b = bat y b.
+
+CoFixpoint iterateSlow (A:Set) F (x:A) : Braun A :=
+  let g := fun z => F (F z) in
+    let y := F x in
+      Conb x (iterateSlow g y)
+             (iterateSlow g (F y)).
+
+Variable iterSlow : forall (A:Set) b f (x:A), bat (iterateSlow f x) b = applyn (ord b) f x.
+
+Definition beq (A:Set) (x:Braun (nat * nat * (nat * nat -> option nat) + A * CoList A * nat)) y :=
+  forall b, 
+    match (bat x b, bat y b) with
+      | (inl (x,y,f), inl (p,q,g)) => 
+        and (x=p) (and (y=q) (forall z, f z = g z))
+      | (inr (x,xs,v),inr (y,ys,w)) =>
+        and (x=y) (and (cleq xs ys) (v=w))
+      | _ => False
+    end.
+    
+Definition weq (A:Set) (x:A * CoList A) y :=
+  match (x,y) with
+    | ((p,ps),(q,qs)) =>
+      and (p = q) (cleq ps qs)
+  end.
+  
+CoInductive rcoeq A : BraunRef A -> BraunRef A -> Prop :=
+| cor : forall x y, x = y -> rcoeq (Ref _ x) (Ref _ y)
+| coc : forall x y od od' ev ev',
+        (x = y) -> rcoeq od od' -> rcoeq ev ev'
+        -> rcoeq (Conr x od ev) (Conr y od' ev').
+
+(*
+
+Add Parametric Morphism A : (@truncate A) with
+  signature (@weq A) ==> 
+  (@beq A) ==> 
+  (@rcoeq A) as trunmor.
+Proof.
+  clear; intros.
+  unfold weq in *; unfold beq in *.
+  destruct x; destruct y.
+  destruct H.
+  cofix.
+  remember (truncate (a,c) x0) as d;
+    remember (truncate (a0,c0) y0) as e;
+      destruct d; destruct e.
+  apply coc.
+  Check frobeq.
+  rewrite frobeq in Heqd;
+    rewrite frobeq in Heqe.
+  destruct x0; destruct y0; simpl in *. 
+  destruct s; destruct s0; simpl in *.
+  destruct p; destruct p0; simpl in *.
+  destruct p; destruct p0; simpl in *.
+  remember (o (mymod n n0, myincr n n0)) as oo;
+    remember (o0 (mymod n1 n2, myincr n1 n2)) as zz;
+      destruct oo; destruct zz; simpl in *;
+        inversion Heqd; inversion Heqe.
+  subst; simpl in *.
+  clear Heqd Heqe.
+  Print mat.
+  Print mat'.
+  f_equal.
+  f_equal.
+    rew
+
+unfold truncate in *; simpl.
+
+
+  intros ? ? ? b; 
+    generalize dependent x;
+      generalize dependent y;
+        induction b; intros ? ? xy;
+          destruct x; destruct y; 
+            inversion xy; subst.
+
+  reflexivity.
+
+  destruct a; apply IHb; assumption.
+Qed.
+*)
 
 Lemma cycleTrue :
   forall (A:Set) (x:A) xs, 
@@ -1333,6 +1507,92 @@ Lemma cycleTrue :
 Proof.
   unfold WellBraun.
   intros.
+  remember (upto (cycle x xs) b) as ucb.
+  destruct ucb. destruct p.
+  unfold cycle in *.
+  
+Admitted.
+
+Check head.
+Check Stream.
+Print Stream.
+
+Definition shead (A:Set) (x:Stream A) :=
+  match x with
+    | More y _ => y
+  end.
+
+Definition stail (A:Set) (x:Stream A) :=
+  match x with
+    | More _ ys => ys
+  end.
+
+
+CoFixpoint fmap A B F (x:Braun A) : Braun B :=
+match x with
+  | Conb h od ev => Conb (F h) (fmap _ F od) (fmap _ F ev) 
+end.
+
+
+Check fmap.
+
+Check (fun (A:Set) (xs:Stream A) => fmap (@shead _) (iterate (@stail A) xs)).
+
+Definition fromStream (A:Set) (xs:Stream A) :=
+  fmap (@shead _) (iterate (@stail A) xs).
+
+Check streamCycle.
+Check cycle.
+
+
+Lemma cycleAccurate :
+  forall (A:Set) (x:A) xs,
+    cofull 
+      (cycle x xs)
+      (fromStream (streamCycle x xs)).
+Proof.
+Admitted.
+
+Check FiniteCoList.
+Check FiniteBraun.
+Check max.
+Print max_type.
+
+Print nat_compare.
+
+
+Definition larger n m :=
+  match nat_compare n m with
+    | Gt => n
+    | _ => m
+  end.
+
+Lemma cycleSmall :
+  forall (A:Set) (xs:CoList A) n, 
+    FiniteCoList xs n ->
+    exists m, m <= 2*(larger (n*(n-1)) (2*n-1))+1.
+Proof.
+Admitted.
+
+
+
+
+
+         ()
+
+
+  destruct l.
+  unfold upto in *.
+  destruct b0. auto.
+  unfold cycle in *.
+  Check coeq.
+  
+  unfold upto' in *.
+
+  unfold cycle in *.
+  
+
+
   generalize dependent A.
   assert (let P b := forall (A : Set) (x : A) (xs : CoList A),
    let (res, ht) := upto (cycle x xs) b in
