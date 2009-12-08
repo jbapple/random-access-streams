@@ -1,37 +1,99 @@
-{-# OPTIONS -fglasgow-exts -fbang-patterns #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+
+-- {-# OPTIONS -fglasgow-exts #-}
 
 {- | 
 
-Using traditional, linear streams, definind in "Data.Stream" as
+A stream is an infinite list.
+Using lists, or traditional, linear streams, definind in "Data.Stream" as
 
-> Stream a = Cons a (Stream a)
+> data Stream a = Cons a (Stream a)
 
-requires O(n) time to access the nth element. This module offers
-"Data.RandomAccessStream".'Stream', taking O(lg n) time to access the nth
-element, but O(lg n) time to perform a 'cons'.
+@O(i)@ time is required to access the @i@'th element from the head of the stream. 
+This module offers Data.RandomAccessStream.'Stream', taking only @O(lg i)@ time to access the @i@'th element, but @O(lg n)@ time to perform a 'cons'.
 
-Of course, streams are infinite, so it is not clear what it means to
-take O(f(n)) time to perform an operation at the head of the
-stream. We can instead give the cost of an operation as the number and
-location of new thunks introduced.
+Of course, streams are infinite, so it is not clear what it means to take @O(f(n))@ time to perform an operation, since there is no @n@ implicitly defined as the size of the stream. 
+A different cost model is used for describing the costs of functions in this module.
 
-For instance, the cons operation on simple lists:
+For an operation producing a stream, the cost is described by specifying the changes the operation makes to a directed acyclic graph (or dag) called the price dag. 
+Every node in the price dag has an associated non-negative price, and may have one or more assocaited stream locations.
+Each stream location has exactly one assocaited dag node.
+
+Define the ancestors of a node @u@ in the price dag as follows:
+
+For every edge @(v,u)@ pointing to @u@:
+
+* @v@ is an ancestor of @u@
+
+* Every ancestor of @v@ is an ancestor of @u@
+
+The price of a node in the dag indicates the cost of evaluating that node to WHNF, assuming all ancestor nodes are at WHNF. 
+The cost to bring a stream location @i@ to WHNF is the sum of:
+
+* the price of the dag node labelled with location @i@
+
+* the sum of the prices of the ancestors of the dag node labelled with location @i@
+
+This may seem a bit abstract. Here are some examples from finite lists:
 
 > cons x xs = x:xs
 
-puts one thunk between the 0th element and the rest of the list.
+The dag of @cons x xs@ is the same as the dag of xs, modified by:
+
+* Adding one to the location of every node
+
+* Adding a new node at location @0@ with cost @1@ 
+
+* Adding a new edge from the node at location @0@ to the node at location @1@.
+
+> reverse x = go x []
+>    where go [] r = r
+>          go (y:ys) r = go ys (y:r)
+
+The dag of @reverse x@ has @length x@ nodes and one edge.
+The edge is from the node at location @0@ to the node at location @1@.
+The node at lcoation @0@ has cost @length x@.
+Producing this dag forces all of the nodes in the price dag of the input list.
+
+So, what does it mean that linear streams have @O(1)@ cons while RandomAccessStream have @O(lg n)@ 'cons'?
+The price dag for @'cons' x y@ is the price dag for @y@ modified by:
+
+* Adding one to the location of every node
+
+* Adding an edge from the node at location 2^(i+1)-2 to 2^(i+2)-2, if one does not exist
+
+* Force each node at each location 2^(i+1)-2
+
+* Add one to the price of each node at each location 2^(i+1)-2
+
+Why not just specialize the operations in this module to "Data.Sequence"?
 
 On the other hand, the 'cons' operation for random access streams puts
-one thunk before each element at position 2^i-1. If x is a
-random access stream with no thunks in the first 2^i-1 elements,
-traversing them (using 'fromList', for instance) takes O(2^i-1)
-time. If, before traversing these elements, we call 'cons', the
-traversal takes O(2^i-1/+i/) time. This is longer than the time taken
-if we were to have used a linear steam: O(2^i).
+one thunk before each element at position 2^i-1. If x is a random
+access stream with no thunks in the first 2^i-1 elements, traversing
+them (using 'fromList', for instance) takes O(2^i-1) time. If, before
+traversing these elements, we call 'cons', the traversal takes
+O(2^i-1/+i/) time. This is longer than the time taken if we were to
+have used a linear steam: O(2^i). 
 
-On the other hand, looking up or modifying the element at location i
-takes only O(lg i) time. These operations take O(i) time on a
-traditional linear stream.
+The thunk picture is even more complicated than this, however, since
+not all thunks are created equal. As an example of this, consider
+'fromList'. This function leaves O(1) thunks at each position in the
+stream. Since accessing a value at position i in a stream takes O(lg
+i) time, one might think that after applying fromList to a linear
+list, accessing the element at position i would take O(lg i) to get to
+the position and an additional O(lg i) for the thunks added by
+fromList that we traverse along the way. This would give us a free way
+to get logarithmic access times on regular lists! Obviously, this
+can't be the case. The thunk at position i depends on a thunk from
+position i-1 already being evaluated. So, even knowing the number and
+location of new the thunks generated by a function does not give you
+all of the information you might want about the running time.
+
+Finally, functions that take apart a stream into a list before
+rebuilding it can destroy sharing. If you build a cyclic stream, then
+filter it, then force the ith position, you must allocate (at least) a
+list of length i. Hopefully, rewrite rules can eliminate some of this.
 
 -}
 
@@ -171,19 +233,27 @@ import Prelude hiding (head, tail, map, scanl, scanl1, iterate, take,
   unzip3, zipWith, words, unwords, lines, unlines, break, span,
   splitAt, zipWith3, zip3, concat, concatMap, lookup, (++),catch)
 
---import qualified Data.Stream as S
 import Control.Applicative
 import qualified Data.List as L
 import Maybe
 import Data.Typeable
 import Data.Generics.Basics
-import Test.QuickCheck hiding (evaluate)
+import Test.QuickCheck
 import Array
-import Control.Exception
 -- TODO: zipper
 
 data Stream a = Stream a (Stream a) (Stream a) 
    deriving (Data,Typeable)
+
+
+{-# RULES
+"toList/fromList" forall a . toList (fromList a) = a
+"fromList/toList" forall a . fromList (toList a) = a
+  #-}
+
+{-# RULES
+"filter/cycle" forall f a . L.filter f (L.cycle a) = L.cycle (L.filter f a)
+ #-}
 
 instance Functor Stream where
     fmap f ~(Stream p q r) = Stream (f p) (fmap f q) (fmap f r)
@@ -215,17 +285,58 @@ instance Arbitrary a => Arbitrary (Stream a) where
           n <- (arbitrary :: Gen Int)
           coarbitrary (take (abs n) x) v
 
+{- |
 
+Appends a list onto the front of a stream without incurring a
+'cons'-ing costs. See also '+++'.
+
+The resulting stream has two extra thunks at each element.
+
+Compared with '+++', '++' is faster except when the size of the list
+is a small fraction of the number of elements of the stream that
+eventually get forced.
+
+On the other hand, '++' loses any sharing information in the stream. So, not only is 
+
+> ([1] ++ repeat 2) `genericIndex` (10^60)
+
+not as fast as if we had used '+++', it also needs to allocate a list
+of size 10^60 before returning the answer.
+
+-}
+
+{-# INLINE (++) #-}
 (++) :: [a] -> Stream a -> Stream a
-x ++ y = foldr cons y x
+x ++ y = fromList $ (L.++) x $ toList y
 
+{- |
+
+Appends a list onto the front of a stream. If the list has length n
+and n+k elements from the resulting stream are forced, we traverse an
+extra 1 thunk at each of the first n elements, plus lg ((k+n)!/k!)
+additional thunks, distributed with a complicated density throughout
+the stream, including the initial n elements.
+
+Compared with '++', '+++' is faster only when n is small compared to
+k.
+
+'+++' also maintains sharing information, so 
+
+> ([1] +++ repeat 2) `genericIndex` (10^60)
+
+actually does not allocate more than O(lg (10^60)) new cells.
+
+-}
+
+{-# INLINE (+++) #-}
 (+++) :: [a] -> Stream a -> Stream a
-x +++ y = fromList $ (L.++) x $ toList y
+x +++ y = foldr cons y x
+
 
 -- | O(lg n). Adds an element onto the head of the 'Stream'. If the
 -- first n elements of a stream x are already forced, traversing the
 -- first n elements of (cons y x) takes O(n + lg n) time. The new
--- thinks are just before the elements at positions 2^i-1, counting
+-- thunks are just before the elements at positions 2^i-1, counting
 -- from 0.
 cons :: a -> Stream a -> Stream a
 cons x ~(Stream p q r) = Stream x (cons p r) q
@@ -242,6 +353,7 @@ tail ~(Stream _ q r) = Stream (head q) r (tail q)
 head :: Stream a -> a
 head ~(Stream p _ _) = p
 
+-- | Applies the given function to every element of the stream
 map :: (a -> b) -> Stream a -> Stream b
 map = fmap
 
@@ -271,6 +383,7 @@ y@ concatenates the elements of y, using x as glue. Every place where
 two lists form y are joined, x in inserted.
 
 -}
+{-# INLINE intercalate #-}
 intercalate :: [a] -> Stream [a] -> Stream a
 intercalate x = fromList . L.intercalate x . toList
 
@@ -309,15 +422,16 @@ iterate f x =
 O(1). Turns a value into an stream containing only that value.
 -}
 repeat :: a -> Stream a
-repeat x = let y = repeat x in Stream x y y
+repeat x = let y = Stream x y y in y
 
 
 -- This could be faster. for instance, cycle [0,1] is Stream 0 (repeat 1) (repeat 0)
--- Is that really faster? Repeat still puts thinks everywhere
+-- Is that really faster? Repeat still puts thunks everywhere
 -- Would take up less memory.
 
 -- | O(1) thunk at each element of result stream. Fails if argument is
 -- the empty list.
+{-# INLINE cycle #-}
 cycle :: [a] -> Stream a
 cycle = fromList . L.cycle
 
@@ -340,24 +454,155 @@ head $ cycleFinite $ replicate (10^6) 2
 generic replicate
 -}
 
+{- |
 
---cycleFinite :: [a] -> Stream a
+cycleFinite turns a finite list into a stream. Unlike cycle, it
+actually preserves sharing. Calling it on an infinite list causes
+non-termination.
+
+-}
+cycleFinite :: [a] -> Stream a
 cycleFinite (x:xs) =
     let l = gl xs
+        gl = L.foldl' (\x y -> 1+x) 0
         y = listArray (0,l) (x:xs)
         f i j = let k = (j+j) `mod` (l+1)
                     od = (i+j) `mod` (l+1)
                     ev = (i+j+j) `mod` (l+1)
                 in Stream (y ! i) (f od k) (f ev k)
-        gl = L.foldl' (\x y -> 1+x) 0
+
         in 
           f 0 1
 
+cycleFiniteSafe :: (a,[a]) -> Stream a
+cycleFiniteSafe (x,[]) = repeat x
+cycleFiniteSafe x@(_,(_:_)) = cycleFiniteArray x ! 1 ! 0
+
+type CycleArray a = Array Int (Array Int (Stream a))
+
+-- allocates n^2 memory. Above version works, memoized, but vacuum does not show memoization
+-- use intmap for incr maps, since incrs are only 2^i mod n
+cycleFiniteArray :: (a,[a]) -> CycleArray a
+cycleFiniteArray (x,[]) = listArray (0,0) [listArray (0,0) [repeat x]]
+cycleFiniteArray (x,xs@(_:_)) =
+    let l = gl xs
+        gl = L.foldl' (\x y -> 1+x) 0
+        y = listArray (0,l) (x:xs)
+        lim = 1+l
+        incrStart 0 i = repeat (y!(i`mod`lim))
+        incrStart j i = 
+            let zero = i`mod`lim
+                one = (i+j)`mod`lim
+                two = (one+j)`mod`lim
+                incr = (j+j)`mod`lim
+                next = incrMemo ! incr
+            in
+              Stream (y!zero) (next ! one) (next ! two)
+        incrMemo = 
+            listArray (0,l) 
+              [listArray (0,l) 
+                 [incrStart incr start | start <- [0..l]] 
+                   | incr <- [0..l]]
+    in
+      incrMemo
+
+incrAt n = 2^(incrAtHelp (n+1))
+
+incrAtHelp n = 
+    case n`div`2 of
+      0 -> 0
+      m -> 1 + (incrAtHelp m)
+
+cyclePossiblyFiniteSafe :: (a,[a]) -> Stream a
+cyclePossiblyFiniteSafe (x,xs) = 
+    cyclePossiblyTrunc $ iterate (cyclePossiblyHelp (x,xs)) (0,Left (x,xs))
+
+--make use either memoized version
+cyclePossiblyHelp :: (a,[a]) -> (Int,Either (a,[a]) (CycleArray a)) -> (Int,Either (a,[a]) (CycleArray a))
+cyclePossiblyHelp t (n,Left (x,[]))     = (n+1,Right $ cycleFiniteArray t)
+cyclePossiblyHelp _ (n,Left (x,(y:ys))) = (n+1,Left (y,ys))
+cyclePossiblyHelp _ (n,Right x)         = (n+1,Right x)
+--iterative deeepening
+--cyclePossiblyFinite :: 
+
+cyclePossiblyTrunc :: Stream (Int,Either (a,[a]) (CycleArray a)) -> Stream a
+cyclePossiblyTrunc (Stream (_,Left (hd,_)) od ev) =
+    Stream hd (cyclePossiblyTrunc od) (cyclePossiblyTrunc ev)
+cyclePossiblyTrunc (Stream (n,Right s) _ _) = 
+    let (_,y) = bounds s
+        len = 1+y
+    in
+    s ! ((incrAt n)`mod`len) ! (n`mod`len)
+
+
+{-
+cyclePossiblyFiniteSafe2 :: (a,[a]) -> Stream a
+cyclePossiblyFiniteSafe2 (x,xs) = 
+    let ans = cyclePossiblyTrunc2 $ iterate (cyclePossiblyHelp2 ans (x,xs)) (0,Left (x,xs))
+
+--make use either memoized version
+--cyclePossiblyHelp2 :: (a,[a]) -> (Int,Either (a,[a]) (CycleArray a)) -> (Int,Either (a,[a]) (CycleArray a))
+cyclePossiblyHelp2 ans t (n,Left (x,[]))     = (n+1,Right $ cycleFiniteArray2 ans t)
+cyclePossiblyHelp2 _   _ (n,Left (x,(y:ys))) = (n+1,Left (y,ys))
+cyclePossiblyHelp2 _   _ (n,Right x)         = (n+1,Right x)
+--iterative deeepening
+--cyclePossiblyFinite :: 
+
+--cyclePossiblyTrunc2 :: Stream (Int,Either (a,[a]) (CycleArray a)) -> Stream a
+cyclePossiblyTrunc2 (Stream (_,Left (hd,_)) od ev) =
+    Stream hd (cyclePossiblyTrunc2 od) (cyclePossiblyTrunc2 ev)
+cyclePossiblyTrunc2 (Stream (n,Right s) _ _) = 
+    let (_,y) = bounds s
+        len = 1+y
+    in
+    s ! ((incrAt n)`mod`len) ! (n`mod`len)
+
+--cycleFiniteArray :: (a,[a]) -> CycleArray a
+cycleFiniteArray2 ans (_,[]) = listArray (0,0) [listArray (0,0) [ans]]
+cycleFiniteArray2 ans (x,xs@(_:_)) =
+    let l = gl xs
+        gl = L.foldl' (\x y -> 1+x) 0
+        y = listArray (0,l) (x:xs)
+        lim = 1+l
+        incrStart 0 i = repeat (y!(i`mod`lim))
+        incrStart j i = 
+            let zero = i`mod`lim
+                one = (i+j)`mod`lim
+                two = (one+j)`mod`lim
+                incr = (j+j)`mod`lim
+                next = incrMemo ! incr
+            in
+              if goodPair j i
+              then depth i ans
+              else Stream (y!zero) (next ! one) (next ! two)
+        goodPair j i = 
+            (i < l) &&
+            (j < (2^
+        incrMemo = 
+            listArray (0,l) 
+              [listArray (0,l) 
+                 [incrStart incr start | start <- [0..l]] 
+                   | incr <- [0..l]]
+    in
+      incrMemo
+
+cyclePossiblyTrunc2' ans (Stream (_,Left (hd,_)) od ev) =
+    Stream hd (cyclePossiblyTrunc2' od) (cyclePossiblyTrunc2' ev)
+cyclePossiblyTrunc2' ans (Stream (n,Right s) _ _) = 
+    let (_,y) = bounds s
+        len = 1+y
+    in
+    s ! ((incrAt n)`mod`len) ! (n`mod`len)
+-}
+
+
 -- | O(n).
+{-# INLINE scanl #-}
 scanl :: (a -> b -> a) -> a -> Stream b -> Stream a
 scanl f z = fromList . L.scanl f z . toList
 
 -- | O(n).
+{-# INLINE scanl1 #-}
 scanl1 :: (a -> a -> a) -> Stream a -> Stream a
 scanl1 f = fromList . L.scanl1 f . toList
 
@@ -375,17 +620,21 @@ unfoldr f x = fmap fst $ iterate (idify f) (f x)
 @n<=0@.
 
 -}
+{-# INLINE take #-}
 take :: Int -> Stream a -> [a]
 take = genericTake
 
+{-# INLINE genericTake #-}
 genericTake :: (Integral x) => x -> Stream a -> [a]
-genericTake (n+1) x = L.genericTake (n+1) (toList x)
-genericTake _ _ = []
+genericTake (n+1) = L.genericTake (n+1) . toList
+genericTake _ = const []
 
 -- | See 'dropWithCons'.
+{-# INLINE drop #-}
 drop :: Int -> Stream a -> Stream a
 drop = genericDrop
 
+{-# INLINE genericDrop #-}
 genericDrop :: (Integral x) => x -> Stream a -> Stream a
 genericDrop n = fromList . listGenericDrop n . toList
 
