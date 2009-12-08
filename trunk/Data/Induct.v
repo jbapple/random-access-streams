@@ -33,15 +33,29 @@ Here begins the definition of the algorithm.
 *)
 
 CoFixpoint fmap F (x:Braun) : Braun :=
-match x with
-  | Conb h od ev => Conb (F h) (fmap F od) (fmap F ev) 
-end.
+  match x with
+    | Conb h od ev => Conb (F h) (fmap F od) (fmap F ev) 
+  end.
+(*
+  Conb 
+  (match x with | Conb h _ _ => F h end)
+  (match x with | Conb _ o _ => fmap F o end)
+  (match x with | Conb _ _ e => fmap F e end).
+*)
 
 CoFixpoint oddFromEven F (x:A) (b:Braun) : Braun :=
-match b with
-  | Conb h od ev => Conb x (oddFromEven F (F h) ev) (fmap F od)
-end.
-
+  match b with
+    | Conb h od ev => Conb x (oddFromEven F (F h) ev) (fmap F od)
+  end.
+(*
+  Conb x 
+  (match b with 
+     | Conb h _ ev => oddFromEven F (F h) ev
+   end)
+  (match b with 
+     | Conb _ od _ => fmap F od
+   end).
+*)
 (*
 
 It is difficult to define 'od' in such a way that Coq can see that it is productive. By making it a variable to this section, that problem can be solved in a separate module.
@@ -547,7 +561,7 @@ Proof.
 
   clear; unfold ord; omega.
 Qed.
-
+(*
 Lemma mainLemma2 :
   forall b e x f k,
     (forall j, ord j < ord b -> forall p,
@@ -631,7 +645,7 @@ Proof.
 Qed.
 
 Check mainLemma.
-
+*)
 Lemma iter :
   let P b := forall f x, bat (iterate f x) b = applyn (ord b) f x
     in forall b, P b.
@@ -733,6 +747,7 @@ Proof.
   rewrite IHn; auto.
 Qed.
 *)
+
 Lemma iterSlow :
   let P b := forall f x, bat (iterateSlow f x) b = applyn (ord b) f x
     in forall b, P b.
