@@ -1417,7 +1417,7 @@ Check find.
 
 Definition cofull A (x:BraunRef A) (y:Braun A) :=
   exists xp,
-    forall b,
+     forall b,
       @find _ x xp b = bat y b.
 
 CoFixpoint iterateSlow (A:Set) F (x:A) : Braun A :=
@@ -1551,6 +1551,22 @@ Lemma cycleAccurate :
       (cycle x xs)
       (fromStream (streamCycle x xs)).
 Proof.
+  Print cofull.
+  unfold cofull.
+  intros.
+  assert (WellBraun (cycle x xs)) as xp.
+  apply cycleTrue.
+  exists xp.
+  intros.
+  unfold fromStream.
+  transitivity (shead (bat (iterate (@stail _) (streamCycle x xs)) b)).
+  rewrite <- iterp.
+  unfold WellBraun in *.
+  
+  
+  
+
+  Print cofull.
 Admitted.
 
 Check FiniteCoList.
@@ -1568,10 +1584,16 @@ Definition larger n m :=
   end.
 
 Lemma cycleSmall :
-  forall (A:Set) (xs:CoList A) n, 
+  forall (A:Set) x (xs:CoList A) n, 
     FiniteCoList xs n ->
-    exists m, m <= 2*(larger (n*(n-1)) (2*n-1))+1.
+    exists m, m <= 2*(larger (n*(n-1)) (2*n-1))+1
+      /\ FiniteBraun (cycle x xs) m.
+      
 Proof.
+  Print CoList.
+  intros.
+
+  Print CoList.
 Admitted.
 
 
