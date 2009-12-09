@@ -48,14 +48,80 @@ Braun trees are a functional data structure with logarithmic-time indexing, upda
 They are mostly superseded by finger trees, which decrease to a constant the time required for deque operations.\cite{kaplan96purely,HinzePat}
 The restrictive structural constraints that give Braun trees slower deque operations than finger trees make them well-suited for operations on infinite lists, or {\em streams}.
 
-This paper presents two new algorithms for building Braun streams from cons lists.
-The first algorithm builds a Braun stream from a cons stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite cons lists.\cite{okasakiBraun} 
-The second algorithm builds a cyclic Braun stream from a possibly finite list; when the list is finite and of length $n$, it builds a Braun stream that uses no more than $O(n^2)$ space, even when forced to arbitrary depth.
-In contrast, circular streams represented with finger trees use at least $O(i)$ space when forced to depth $i$.
+This paper presents two new algorithms for building Braun streams from lazy lists.
+The first algorithm builds a Braun stream from a linear stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite lists.\cite{okasakiBraun} 
+The second algorithm builds a cyclic Braun stream from a possibly finite list. 
+When applied to finite lists of length $n$, this algorithm generates Braun streams that use $O(n^2)$ space, even when forced to arbitrary depth.
+In contrast, circular streams represented with finger trees must use $\Omega(i)$ space when forced to depth $i$.
 
 Correctness proofs of the two algorithms are presented along with formal verifications using the Coq proof assistant.
 
 \section{Introduction}
+
+Braun trees are a tightly-constrained functional data structure offering array and deque operations in logarithmic time.\cite{hoogerwoord,okasakiBraun} 
+Modern data structures with looser constraints support constant-time deque operations, and perform better than Braun trees in practice.\cite{okasakiSkewLists}
+These more permissive structures, however, make some operations unsafe when building infinite lists, or {\em streams}.
+
+For example, a user constructing an infinite list in Haskell can write {\tt let bees = 'b' : bees} to construct a stream.
+Because the cons operation on native Haskell lists does need to inspect its second argument, \verb|bees| is constructed without trouble.
+An example of how this fails in Braun tree replacements is shown in Figure~\ref{consFail}.
+
+\begin{figure}
+\begin{alltt}
+data Tree a = Leaf a
+            | Node a (Tree a) (Tree a)
+type RAL a = [(Int,Tree a)]
+
+cons :: a -> RAL a -> RAL a
+cons x xs@((size1,t1) : (size2,t2) : rest) =
+    if size1 == size2
+    then (1 + size1 + size2, Node x t1 t2) : rest
+    else (1,Leaf x) : xs
+cons x xs = (1,Leaf x) : xs
+\end{alltt}
+\caption{The type of skew binary random access lists and the cons operation \cite{okasakiSkewLists}.}
+\label{consFail}
+\end{figure}
+
+Figure~\ref{consFail} shows the datatype definition and cons operation for Okasaki's skew binary random access lists \cite{okasakiSkewLists}.
+In this representations, random access lists are linear lists containing perfectly balanced binary trees stored in order of increasing depth.
+No two trees in the list are the same size unless they are the two smallest trees in the list, and no three trees in the list are ever the same size.
+When the two smallest trees are the same size, the cons operation glues them together with the new head of the list.
+Otherwise, it just appends the new head as a tree of size 1.
+
+
+% \perp? doesn't terminate? has no WHNF?
+In this implementation of random access lists, \verb|let bees = cons 'b' bees| produces $\perp$.
+The cons operation must inspect the new tail before constructing the head.
+On \verb|bees|, this is not a terminating operation.
+
+\begin{figure}
+\begin{alltt}
+bees :: RAL Char
+bees = (1,Leaf 'b') : fmap (more 'b') bees
+    where 
+      more :: a -> (Int,Tree a) -> (Int,Tree a)
+      more v (n,t) = (1 + 2*n, Node v t t)
+\end{alltt}
+\caption{Constructing infinite skew binary random access lists without cons.}
+\label{infiniteSkew}
+\end{figure}
+
+Of course, \verb|bees| can be constructed if we avoid cons, as shown in Figure~\ref{infiniteSkew}.
+Despite this work-around, cons is still an unsafe operation.
+
+%TODO: is it the culprit? cons also inspects the *value* of the list
+The culprit is the flexibility in the shape of the random access list.
+If the shape were fixed, 
+
+
+see if the list is of length $2$ or more before 
+
+Skew binary random access lists, multiple constructors, O(1) worst-case cons \cite{okasakiSkewLists}
+
+Segmented binary, multiple constructors, O(1) worst case cons \cite{okasakiThesis}
+
+Edison's \verb|BinaryRandList|, $O(\log n)$ worst case cons, O(1) expected case cons for non-persistent use \cite{holtersThesis}
 
 To achieve these constant-time bounds, however, skew lists and finger trees relax their structural constraints. 
 This prevents some stream constructions from terminating. 
@@ -114,7 +180,7 @@ evens (Stream _ _ e) = e
 \label{basicCode}
 \end{figure}
 
-\section{Building Braun streams}
+\section{Building Braun streams from cons streams}
 
 The algorithm for building a Braun stream from a linear stream (along with supporting code) is displayed in Figure~\ref{iterateCode}.
 
@@ -305,6 +371,115 @@ When $a = \false$,
 With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\ord{d}+2}x = f^{\ord{\cons{\false}{d}}}x = f^{\ord{b}}x$.
 
 \end{proof}
+
+\section{Cycling possibly finite lists}
+
+\begin{alltt}
+
+Function floorlg2 (x:nat) \{measure id x\} :nat :=
+  match div2 x with
+    | 0 => 0
+    | y => S (floorlg2 y)
+  end.
+
+Definition myincr real mod := 
+  mymod (pow 2 (floorlg2 (S real))) mod.
+
+Function mymod (n:nat) (m:nat) \{measure id n\} : nat :=
+  match m with
+    | 0 => 0
+    | _ =>
+      match nat_compare n m with
+        | Lt => n
+        | Eq => 0
+        | Gt => mymod (n-m) m
+      end
+  end.
+
+Definition action 
+  (A:Set) 
+  (x:(nat*nat*(nat*nat->option nat))
+    +(A * CoList A * nat))
+  : (nat*nat*(nat*nat->option nat))
+    +(A * CoList A * nat) :=
+  match x with
+    | inl (real,mod,f) => 
+      inl _ 
+      (S real,
+       mod,
+       match f (mymod real mod,myincr real mod) with
+         | Some v => f
+         | None => fun pi =>
+           match pi with
+             | (p,i) => 
+               match (nat_compare p (mymod real mod),
+                 nat_compare i (myincr real mod)) with
+                 | (Eq,Eq) => Some real
+                 | _ =>  f pi
+               end
+           end
+       end)
+    | inr (v,rem,sofar) =>
+      match rem with
+        | Nil => inl _ (S sofar,S sofar,memo (S sofar))
+        | Cons hed tl => inr _ (hed,tl,S sofar)
+      end
+  end.
+
+CoInductive CoList (A:Set) : Set :=
+| Nil : CoList A
+| Cons : A -> CoList A -> CoList A.
+
+CoInductive Braun (A:Set) : Set :=
+| Conb : A -> Braun A -> Braun A -> Braun A.
+
+CoInductive BraunRef (A:Set) : Set :=
+| Conr : A -> BraunRef A -> BraunRef A -> BraunRef A
+| Ref : nat -> BraunRef A.
+
+Fixpoint mat' (A:Set) (whole:A * CoList A) (rem:CoList A) n :=
+  match n with
+    | 0 => 
+      match rem with
+        | Nil => let (ans,_) := whole in ans
+        | Cons ans _ => ans
+      end
+    | S m =>
+      match rem with
+        | Nil => mat' whole (let (_,rest) := whole in rest) m
+        | Cons _ rest => mat' whole rest m
+      end
+  end.
+
+Definition mat (A:Set) (whole:A * CoList A) (n:nat) : A :=
+  mat' whole (let (hed,tyl) := whole in Cons hed tyl) n.
+
+CoFixpoint truncate (A:Set) (whole:A * CoList A)
+  (x:Braun ((nat*nat*(nat*nat->option nat))+(A * CoList A * nat)))
+    : BraunRef A :=
+    match x with
+      | Conb v od ev =>
+        match v with 
+          | inl (real,mod,f) =>
+            match f (mymod real mod,myincr real mod) with
+              | None => Conr 
+                        (mat whole real)
+                        (truncate whole od)
+                        (truncate whole ev)
+              | Some bak => Ref _ bak
+            end
+          |inr (hed, _, _) =>
+            Conr hed
+            (truncate whole od)
+            (truncate whole ev)
+        end
+    end.
+
+Definition cycle A hed tyl :=
+       truncate (hed,tyl) 
+         (iterate (@action A) (inr _ (hed,tyl,0))).
+
+\end{alltt}
 
 \section{Formalizing the proof of correctness}
 
