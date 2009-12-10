@@ -1,3 +1,21 @@
+data BS a = BS a (BS a) (BS a)
+
+bbcons x y =
+  BS x
+     (case y of
+        BS h _ e -> bbcons h e)
+     (case y of
+        BS _ o _ -> o)
+
+bscons x ~(BS h o e) = BS x (bscons h e) o
+
+eyes :: BS Char
+eyes = bscons 'i' eyes
+
+smallEyes :: BS Char
+smallEyes = 
+  let ans = BS 'i' ans ans 
+  in ans
 
 data Node a = N2 a a
             | N3 a a a
