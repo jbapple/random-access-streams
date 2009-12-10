@@ -91,8 +91,11 @@ stream x = TTT (D2 x x) (stream (N2 x x))
 safeBees :: TTT Char
 safeBees = stream 'b'
 \end{alltt}
-\caption{A simplification of 2-3 finger trees for use as a stream \cite{HinzePat}. 
-Use of {\tt cons} as in {\tt dangerousBees} produces $\perp$, but a stream like {\tt bees} can be created while avoiding {\tt cons}.}
+\caption{
+A simplification of 2-3 finger trees for use as a stream \cite{HinzePat}. 
+Use of {\tt cons} as in {\tt dangerousBees} produces $\perp$, but a stream like {\tt safeBees} can be created while avoiding {\tt cons}.
+However, {\tt safeBees} uses $\Omega(\log i)$ space when forced to depth $i$.
+}
 \label{23consFail}
 \label{23stream}
 \end{figure}
@@ -104,82 +107,111 @@ At the leaves of each tree are {\tt Digit}s containing the elements of the strea
 The {\tt cons} operation, in order to produce the first {\tt Digit} in the stream, needs to know the first {\tt Digit} in the rest of the stream.
 For streams like {\tt dangerousBees}, {\tt cons} must know the first {\tt Digit} in the stream in order to produce the first {\tt Digit} in the stream.
 Because of this, {\tt dangerousBees} is actually undefined.
+
 Though {\tt cons} is an unsafe operation, streams can still be built of 2-3 finger trees by avoiding {\tt cons}.
-The cause of the danger is the flexibility in the shape of the random access list.
-If the shape were fixed, 
+Figure~\ref{23stream} also shows {\tt safeBees}, which does not evaluate to $\perp$, unlike {\tt dangerousBees}.
+On the other hand, it uses $\Omega(\log i)$ space when forced to depth $i$.
+
+\begin{figure}
+\begin{alltt}
+data BS a = BS a (BS a) (BS a)
+
+cons x \(\sim\)(BS h o e) = BS x (cons h e) o
+
+eyes :: BS Char
+eyes = cons 'i' eyes
+
+smallEyes :: BS Char
+smallEyes = 
+  let ans = BS 'i' ans ans 
+  in ans
+\end{alltt}
+\caption{
+Braun streams along with their {\tt cons} operation.
+The ``$\sim$'' before the pattern match in {\tt cons} is an {\em irrefutable pattern} -- a pattern which is matched lazily \cite{haskellReport}.
+The {\tt cons} operation is safe, so the stream {\tt eyes} is not $\perp$.
+The stream {\t smallEyes} only takes up $O(1)$ space.
+}
+\label{braunCons}
+\label{braunShare}
+\end{figure}
+
+Figure~\ref{braunCons} illustrates that Braun streams are better suited for these cases.
+First, {\tt cons} is safe.
+The result of an application of {\tt cons} is guarenteed to have {\tt BS} as its top-level constructor.
+The irrefutable pattern matching in the deinition of {\tt cons}, denoted by ``$\sim$'', ensures that the top-level constructor is pattern matched lazily.
+The definition of {\tt cons} given is thus equivalent to:
+
+\begin{alltt}
+cons x y =
+  BS x
+     (case y of
+        BS h _ e -> cons h e)
+     (case y of
+        BS _ o _ -> o)
+\end{alltt}
+
+Since {\tt cons} for Braun streams does not need to match the top-level constructor of its tail until its own top-level constructor is chosen, {\tt eyes} in Figure~\ref{braunCons} is well-formed.
+Additionally, unlike {\tt safeBees} in Figure~\ref{23stream}, {\tt smallEyes} in Figure~\ref{braunShare} can reuse its representation in its subtrees to use only $O(1)$ space, even when forced to arbitrary depth.
+
+Like 2-3 finger trees, other stream candidates offering $O(1)$ deque operations do not support safe {\tt cons} or constant-space construction of repeating streams. This includes:
+
+\begin{itemize}
+\item Skew binary random access lists, which offers $O(1)$ worst-case {\tt cons} \cite{okasakiSkewLists}
+\item Edison's \verb|BinaryRandList|, which supports {\tt cons} in $O(\log n)$ worst case time and $O(1)$ expected time \cite{holtersThesis}
+\item Segmented binary lists,ehich offers $O(1)$ worst case {\tt cons} \cite{okasakiThesis}
+\end{itemize}
+
+What does linear time mean on infinite streams?
+
+\begin{comment}
 
 \begin{figure}
 \begin{alltt}
 data Tree a = Leaf a
             | Node a (Tree a) (Tree a)
 type RAL a = [(Int,Tree a)]
-
 cons :: a -> RAL a -> RAL a
 cons x xs@((size1,t1) : (size2,t2) : rest) =
     if size1 == size2
     then (1 + size1 + size2, Node x t1 t2) : rest
     else (1,Leaf x) : xs
 cons x xs = (1,Leaf x) : xs
-
 bees :: RAL Char
 bees = (1,Leaf 'b') : fmap (more 'b') bees
     where 
       more :: a -> (Int,Tree a) -> (Int,Tree a)
       more v (n,t) = (1 + 2*n, Node v t t)
-
 badbees :: RAL Char
 badbees = cons 'b' badbees
-
 \end{alltt}
 \caption{The type of skew binary random access lists and the cons operation \cite{okasakiSkewLists}.
 The stream {\tt badbees} shows that, even though {\tt }}
 \label{consFail}
+\label{infiniteSkew}
 \end{figure}
-
 Figure~\ref{consFail} shows the datatype definition and cons operation for Okasaki's skew binary random access lists \cite{okasakiSkewLists}.
 In this representations, random access lists are linear lists containing perfectly balanced binary trees stored in order of increasing depth.
 No two trees in the list are the same size unless they are the two smallest trees in the list, and no three trees in the list are ever the same size.
 When the two smallest trees are the same size, the cons operation glues them together with the new head of the list.
 Otherwise, it just appends the new head as a tree of size 1.
-
-
 % \perp? doesn't terminate? has no WHNF?
 In this implementation of random access lists, \verb|let bees = cons 'b' bees| produces $\perp$.
 The cons operation must inspect the new tail before constructing the head.
 On \verb|bees|, this is not a terminating operation.
-
-\begin{figure}
-\begin{alltt}
-\end{alltt}
-\caption{Constructing infinite skew binary random access lists without cons.}
-\label{infiniteSkew}
-\end{figure}
-
 Of course, \verb|bees| can be constructed if we avoid cons, as shown in Figure~\ref{infiniteSkew}.
 Despite this work-around, cons is still an unsafe operation.
-
 %TODO: is it the culprit? cons also inspects the *value* of the list
 The culprit is the flexibility in the shape of the random access list.
 If the shape were fixed, 
-
-
 see if the list is of length $2$ or more before 
-
-Skew binary random access lists, multiple constructors, O(1) worst-case cons \cite{okasakiSkewLists}
-
-Segmented binary, multiple constructors, O(1) worst case cons \cite{okasakiThesis}
-
-Edison's \verb|BinaryRandList|, $O(\log n)$ worst case cons, O(1) expected case cons for non-persistent use \cite{holtersThesis}
-
 To achieve these constant-time bounds, however, skew lists and finger trees relax their structural constraints. 
 This prevents some stream constructions from terminating. 
 For instance, \verb|cons| pattern matches on its second argument to determine its top-level constructor, so \verb|let ones = cons 1 ones| can never produce a top-level constructor.
-
 In addition, the complexity of the structural constraints on skew lists and finger trees increase the memory usage of certain streams.
 For instance, the stream \verb|ones| mentioned above can be stored in a Braun stream such that arbitrary indices may be retrieved without allocating more than a constant amount of memory.
 Finger trees and skew lists, on the other hand, will both allocate $O(\log i)$ memory when the $i$th element is retrieved.
-
-What does linear time mean on infinite streams?
+\end{comment}
 
 \section{Braun streams}
 
