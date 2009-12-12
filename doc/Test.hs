@@ -70,11 +70,12 @@ b3cons x Nil = One x
 b3cons x (One y) = B3 x y Nil Nil Nil
 b3cons x (B3 y z zero one two) = B3 x y (b3cons z two) zero one
 
-data Braun a = Braun a (Braun a) (Braun a)
+data Braun a = Braun {bhead :: a, bodds :: Braun a, bevens :: Braun a}
 
 bcons x ~(Braun h o e) =
     Braun x (bcons h e) o
-
+{-
 bhead  (Braun h _ _) = h
 bodds  (Braun _ o _) = o
 bevens (Braun _ _ e) = e
+-}
