@@ -62,12 +62,12 @@ Correctness proofs of the two algorithms are presented along with formal verific
 \label{logspaceCycle}
 
 Braun trees are a tightly-constrained functional data structure offering array and deque operations in logarithmic time.\cite{hoogerwoord,okasakiBraun} 
-Modern data structures with looser constraints support constant-time deque operations, and perform better than Braun trees in practice.\cite{okasakiSkewLists}
+Modern data structures with looser constraints support constant-time deque operations, and perform better than Braun trees in practice.\cite{HinzePat,okasakiSkewLists}
 These more permissive structures, however, make some operations unsafe when building infinite lists, or {\em streams}.
 
 For example, a user constructing an infinite list in Haskell can write {\tt let bees = 'b' : bees} to construct a stream.
 Because the cons operation on native Haskell lists does need to inspect its second argument, {\tt bees} is constructed without trouble.
-An example of how this fails in a typical Braun tree replacement is shown in Fig.~\ref{23consFail}.
+An example of how this fails in a typical modern random-access list is shown in Fig.~\ref{23consFail}.
 
 \begin{figure}
 \begin{alltt}
@@ -591,6 +591,7 @@ A unsolved 90-year-old conjecture of Artin proposes that this occurs infinitely 
 
 \subsection{Algorithm for Producing Minimal Cyclic Braun Streams}
 \label{cycleAlgo}
+
 It shall now be our goal to produce a well-formed \share that achieves this minimum size.
 Though the process is straightforward, there are many details to track.
 Haskell code for producing such a \share is in Fig.~\ref{cycleDetails}.
@@ -601,10 +602,10 @@ floorlg2 x = case x `div` 2 of
                0 -> 0
                y -> 1 + floorlg2 y
 
-myincr real len = mod (2^(floorlg2 (1+real))) len
+increm real len = mod (2^(floorlg2 (1+real))) len
 
 memo n (p,i) =
-    case (compare p n, compare i (myincr p n)) of
+    case (compare p n, compare i (increm p n)) of
       (LT,EQ) -> Just p
       _ -> Nothing
 
@@ -616,11 +617,11 @@ type Trak a = Trak' Integer a
 action :: Trak a -> Trak a
 action (Left (real,len,f)) =
     Left (real+1,len,
-          case f (mod real len, myincr real len) of
+          case f (mod real len, increm real len) of
             Just _ -> f
             Nothing -> 
                 (\(\backslash\)(p,i) ->
-                 if (p == mod real len) && (i == myincr real len)
+                 if (p == mod real len) && (i == increm real len)
                  then Just real
                  else f (p,i)))
 action (Right (_,[],sofar)) = Left (1+sofar,1+sofar,memo (1+sofar))
@@ -628,7 +629,7 @@ action (Right (_,hed:tyl,sofar)) = Right (hed,tyl,1+sofar)
 
 trunc :: [a] -> BS (Trak a) -> BraunRef a
 trunc whole (BS (Left (real,len,f)) od ev) =
-    case f (mod real len,myincr real len) of
+    case f (mod real len,increm real len) of
       Just bak -> Ref (order bak)
       Nothing -> Branch (whole `genericIndex` (mod real len)) 
                         (trunc whole od) 
@@ -645,9 +646,6 @@ smallCycle hed tyl =
 \label{cycleDetails}
 \end{figure}
 
-One additional detail we must deal with is that the algorithm must correctly deal with infinite input.
-Furthermore, the input cannot be determined to be infinite by its shape.
-
 In order to build a minimal well-formed {\tt Share}, we must ensure that no internal node shares an address with location with a smaller location;
 For any address $a$, only the first location with that address should be an internal node.
 All other locations in the \share with the same address should be {\tt Ref}s.
@@ -656,7 +654,26 @@ All other locations in the \share with the same address should be {\tt Ref}s.
 We do so by using the iterate algorithm designed in Sect.~\ref{iterSect}.
 By proceeding through the locations in order, we can ensure that later locations do not share addresses with earlier ones.
 To track earlier addresses, the iterated function {\tt action} acts on a partial map from addresses to locations of previously seen internal nodes.
-To track the address as a function of the location, {\tt action} also acts on the location 
+If the address $a$ at location {\tt real} is already associated with a location, the map is not updated.
+Otherwise, the map is updated so that $a$ is associated with {\tt real}.
+To track the address as a function of the location, {\tt action} also acts on the location {\tt real} and the cycle length {\tt len}, which are converted to the address increment and offset by {\tt increm} and {\tt mod}.
+These details are in the {\tt Left} branch of {\tt action}.
+
+One additional detail we must deal with is that the algorithm must correctly deal with infinite input.
+Furthermore, there is no Haskell function that can determine if a list is infinite.
+The function {\tt action} therefore also acts on the input list itself, taking the tail at each iteration.
+The details are in the {\tt Right} branch of {\tt action}
+If the input is exhausted at location $sofar$, it has length $sofar+1$.
+Once the input list is exhausted, {\tt action} initializes the partial map from addresses to locations.
+Since no two locations $i,j <\ ${\tt sofar} have the same offset, none should be represented as a {\tt Ref}.
+
+Applying iterate to {\tt action} and the input list produces a Braun stream with the output of action as its values.
+The function {\tt trunc} maps those values to {\tt Share}s.
+A {\tt Ref} is produced at location $i$ (with addresss $a$) if and only if {\tt action}$^i$ has consumed the entirety of the list input and the partial map from addresses to locations already maps $a$ to a location $j < i$.
+All of the output of {\tt action} in the subtree at $i$ is discarded, but the addresses of all of these locations are already present in the subtree at location $j$.
+
+If the input list is finite, {\tt action} and {\tt trunc} ensure that no two locations with the same address are both represented as internal nodes.
+If the input list is not finite, {\tt action} never excapes the {\tt Right} branch, and {\tt trunc} produces an infinite {\tt Share}.
 
 \begin{comment}
 In the code above, the central detail is the function {\tt action}.
@@ -708,7 +725,7 @@ truncateFinite (BS (loc,m,prev) od ev) =
        Nothing -> BS offsetHere 
                      (truncateFinite od)
                      (truncateFinite ev)
-            match f (mymod real mod,myincr real mod) with
+            match f (mymod real mod,increm real mod) with
               | None => Conr 
                         (mat whole real)
                         (truncate whole od)
@@ -726,7 +743,7 @@ floorlg2 (x:nat) \{measure id x\} :nat :=
     | 0 => 0
     | y => S (floorlg2 y)
   end.
-Definition myincr real mod := 
+Definition increm real mod := 
   mymod (pow 2 (floorlg2 (S real))) mod.
 CoInductive BraunRef (A:Set) : Set :=
 | Conr : A -> BraunRef A -> BraunRef A -> BraunRef A
@@ -740,13 +757,13 @@ Definition action
       inl _ 
       (S real,
        mod,
-       match f (mymod real mod,myincr real mod) with
+       match f (mymod real mod,increm real mod) with
          | Some v => f
          | None => fun pi =>
            match pi with
              | (p,i) => 
                match (nat_compare p (mymod real mod),
-                 nat_compare i (myincr real mod)) with
+                 nat_compare i (increm real mod)) with
                  | (Eq,Eq) => Some real
                  | _ =>  f pi
                end
@@ -765,7 +782,7 @@ CoFixpoint truncate (A:Set) (whole:A * CoList A)
       | Conb v od ev =>
         match v with 
           | inl (real,mod,f) =>
-            match f (mymod real mod,myincr real mod) with
+            match f (mymod real mod,increm real mod) with
               | None => Conr 
                         (mat whole real)
                         (truncate whole od)
@@ -802,7 +819,7 @@ Function floorlg2 (x:nat) \{measure id x\} :nat :=
     | 0 => 0
     | y => S (floorlg2 y)
   end.
-Definition myincr real mod := 
+Definition increm real mod := 
   mymod (pow 2 (floorlg2 (S real))) mod.
 Function mymod (n:nat) (m:nat) \{measure id n\} : nat :=
   match m with
@@ -825,13 +842,13 @@ Definition action
       inl _ 
       (S real,
        mod,
-       match f (mymod real mod,myincr real mod) with
+       match f (mymod real mod,increm real mod) with
          | Some v => f
          | None => fun pi =>
            match pi with
              | (p,i) => 
                match (nat_compare p (mymod real mod),
-                 nat_compare i (myincr real mod)) with
+                 nat_compare i (increm real mod)) with
                  | (Eq,Eq) => Some real
                  | _ =>  f pi
                end
@@ -870,7 +887,7 @@ CoFixpoint truncate (A:Set) (whole:A * CoList A)
       | Conb v od ev =>
         match v with 
           | inl (real,mod,f) =>
-            match f (mymod real mod,myincr real mod) with
+            match f (mymod real mod,increm real mod) with
               | None => Conr 
                         (mat whole real)
                         (truncate whole od)
@@ -893,18 +910,19 @@ Definition cycle A hed tyl :=
 
 Some of the details of the algorithms presented above have been formalized in the Coq proof assistant \cite{coq,website}.
 
-One of the advantages of formalizing proofs of functional algorithms in Coq is that the data structures and algorithms can sometimes be directly embedded in Coq using its built-in syntax for inductive and coinductive types as well as recursive functions.
+One of the advantages of formalizing proofs of functional algorithms in Coq is that the data structures and algorithms can sometimes be directly embedded in Coq using its built-in syntax.
+Coq natively supports inductive and coinductive types as well as recursive  and corecursive functions.
 For the algorithms in this paper, direct embedding was only partially possible.
 
 For instance, Coq requires functions producing values of coinductive types to be {\em productive}.
 This condition as enforced in Coq is similar to the requirement that functions consuming values of inductive types be structurally recursive.
-The iterate algorithm presented in Sect.~\ref{iterSect} is productive because of the way the two subtrees are interrelated, and is not obviously productive in the eyes of Coq.
+The iterate algorithm presented in Sect.~\ref{iterSect} is productive because of the way the two subtrees are interrelated, and is not productive in the eyes of Coq.
 Instead of proving this function productive directly, it was rewritten as an inductive function, then proved terminating using some of Coq's more sophistacted methods for writing recursive functions, like well-founded induction.
 The correctness of iterate is proved separately from this definition, in a module that simply assumes a definition matching the Haskell one given in Fig.~\ref{iterateCode}.
 
 In some cases, direct embedding in Coq was both possible and even more usable that the Haskell code so embedded.
 As noted in Subsect.~\ref{cycleAlgo}, Haskell lists may actually be streams.
-Though this is sometimes a desired characteristic, as in the input to cycle, but in some cases it does not reflect the actual desired meaning of the program.
+Though this is sometimes a desired characteristic, as in the input to cycle, in some cases it does not reflect the actual desired meaning of the program.
 For instance, Braun streams are only indexed by finite lists of boolean values.
 Coq distinguishes between data structures that can be infinite (coinductive types) and those that must be finite (inductive types).
 This difference helps Coq accurately model both intended uses, unlike Haskell.
