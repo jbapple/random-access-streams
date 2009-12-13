@@ -1596,6 +1596,130 @@ Proof.
   Print CoList.
 Admitted.
 
+Inductive Node a := 
+  N2 : a -> a -> Node a
+| N3 : a -> a -> a -> Node a.
+
+Inductive Digit a := 
+  D1 : a -> Digit a
+| D2 : a -> a -> Digit a
+| D3 : a -> a -> a -> Digit a
+| D4 : a -> a -> a -> a -> Digit a.
+
+CoInductive TTT a := 
+  TT : (Digit a) -> (TTT (Node a)) -> TTT a.
+
+CoFixpoint cons a (p:a) (xs:TTT a) : TTT a :=
+  match xs with
+    | TT (D1 q) ds => TT (D2 p q) ds
+    | TT (D2 q r) ds => TT (D3 p q r) ds
+    | TT (D3 q r s) ds => TT (D4 p q r s) ds
+    | TT (D4 q r s t) ds => TT (D2 p q) (cons (N3 r s t) ds)
+  end.
+
+(*
+CoFixpoint dangerousBees a (b:a) := cons b (dangerousBees b).
+*)
+
+Lemma cofinite : 
+  forall A (l:CoList A), (forall n, ~FiniteCoList l n) -> InfiniteCoList l.
+Proof.
+  clear; cofix.
+  intros.
+  destruct l.
+  assert False; unfold not in H.
+  apply (H 0). constructor.
+  inversion H0.
+  constructor.
+  apply cofinite.
+  unfold not in *; intros.
+  apply (H (S n)).
+  constructor. apply H0.
+Qed.
+
+Lemma coinfinite : 
+  forall A (l:CoList A), ~InfiniteCoList l -> ~~(exists n,FiniteCoList l n).
+Proof.
+  clear.
+  unfold not. intros.
+  apply H. apply cofinite. unfold not; intros.
+  apply H0. exists n. apply H1.
+Qed.
+
+Lemma coinfinite2 : 
+  forall A (l:CoList A), ~InfiniteCoList l -> ~(forall n, ~FiniteCoList l n).
+Proof.
+  clear.
+  unfold not. intros.
+  apply H. apply cofinite. unfold not; intros.
+  apply (H0 n). auto.
+Qed.
+
+Lemma finite :
+  forall A (l:CoList A) n, FiniteCoList l n -> ~InfiniteCoList l.
+Proof.
+  clear; unfold not; intros.
+  induction H.
+  inversion H0.
+  inversion H0.
+  apply IHFiniteCoList.
+  exact H2.
+Qed.
+
+Lemma infinite :
+  forall A (l:CoList A), InfiniteCoList l -> (forall n, ~FiniteCoList l n).
+Proof.
+  clear; unfold not.
+  intros.
+  generalize dependent A.
+  induction n; intros;
+  destruct l; inversion H; subst.
+  inversion H0.
+  eapply IHn.
+  apply H2.
+  inversion H0; subst.
+  exact H3.
+Qed.
+
+End type.
+
+Extraction Language Haskell.
+
+Extraction cycle.
+(*
+Extraction "cycleextract.hs" cycle.
+*)
+Extraction iterateSlow.
+Extraction find.
+Extraction find_terminate.
+Extraction type.
+
+  destruct 
+  subst.
+
+
+  destruct H0.
+
+Lemma coinfinite3 : 
+  forall A (l:CoList A), ~InfiniteCoList l -> exists n, FiniteCoList l n.
+Proof.
+  clear.
+  unfold not. intros.
+  destruct l.
+  exists 0. constructor.
+  
+  apply H. apply cofinite. unfold not; intros.
+  apply (H0 n). auto.
+Qed.
+
+  Guarded.
+  Print InfiniteCoList.
+
+  Print 
+
+  destruct (H 0).
+  inversion H.
+
 
 
 

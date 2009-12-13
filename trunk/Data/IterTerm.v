@@ -656,22 +656,24 @@ Proof.
 Defined.
 
 Print nana.
-
+(*
 CoFixpoint oddCo : CoBr (S inf) := 
   oddFromEvenCo (F X) (sinf evenCo)
 with evenCo : CoBr (S inf) :=
   fmapC oddCo.
+*)
 (*
 Definition coj := oddCo.
 *)
+(*
 End Single.
 
 
 
 Extraction Language Haskell.
-(*
-Extraction Library Single.
 
+Extraction Library Single.
+*)
 
 Program Fixpoint oddR (n:list bool) {measure bOrd n} : Br n :=
   fun b p => 
