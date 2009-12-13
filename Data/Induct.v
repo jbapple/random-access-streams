@@ -61,7 +61,10 @@ CoFixpoint oddFromEven F (x:A) (b:Braun) : Braun :=
 It is difficult to define 'od' in such a way that Coq can see that it is productive. By making it a variable to this section, that problem can be solved in a separate module.
 
 *)
-
+(*
+Fact od : (A -> A) -> A -> Braun
+with ev : (A -> A) -> A -> Braun.
+*)
 Variable od : (A->A) -> A -> Braun.
 
 Definition ev F (x:A) :=
