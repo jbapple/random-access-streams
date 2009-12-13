@@ -1,6 +1,6 @@
-\documentclass{llncs}
+\documentclass[envcountsect]{llncs}
 %\usepackage{amsthm}
-\usepackage{amssymb,amsmath,algorithmic,algorithm,verbatim,alltt}
+\usepackage{amssymb,amsmath,algorithmic,algorithm,verbatim,alltt,url}
 
 \DeclareMathOperator{\oddFrom}{oddFromEven}
 \DeclareMathOperator{\nil}{\langle\rangle}
@@ -17,6 +17,7 @@
 \DeclareMathOperator{\ev}{ev}
 \DeclareMathOperator{\od}{od}
 \newcommand{\app}{+\!\!\!+\ }
+\newcommand{\share}{{\tt Share} }
 %\renewcommand{\algorithmiccomment}[1]{// #1}
 
 \begin{comment}
@@ -35,7 +36,7 @@
 
 \begin{document}
 
-\title{Building Braun streams efficiently}
+\title{Building Braun Streams Efficiently}
 
 \author{Jim Apple}
 
@@ -66,7 +67,7 @@ These more permissive structures, however, make some operations unsafe when buil
 
 For example, a user constructing an infinite list in Haskell can write {\tt let bees = 'b' : bees} to construct a stream.
 Because the cons operation on native Haskell lists does need to inspect its second argument, {\tt bees} is constructed without trouble.
-An example of how this fails in a typical Braun tree replacement is shown in Figure~\ref{23consFail}.
+An example of how this fails in a typical Braun tree replacement is shown in Fig.~\ref{23consFail}.
 
 \begin{figure}
 \begin{alltt}
@@ -154,8 +155,8 @@ cons x y =
      (odds y)
 \end{alltt}
 
-Since {\tt cons} for Braun streams does not need to match the top-level constructor of its tail until its own top-level constructor is chosen, {\tt eyes} in Figure~\ref{braunCons} is well-formed.
-Additionally, unlike {\tt safeBees} in Figure~\ref{23stream}, {\tt smallEyes} in Figure~\ref{braunShare} can reuse its representation in its subtrees to use only $O(1)$ space, even when forced to arbitrary depth.
+Since {\tt cons} for Braun streams does not need to match the top-level constructor of its tail until its own top-level constructor is chosen, {\tt eyes} in Fig.~\ref{braunCons} is well-formed.
+Additionally, unlike {\tt safeBees} in Fig.~\ref{23stream}, {\tt smallEyes} in Fig.~\ref{braunShare} can reuse its representation in its subtrees to use only $O(1)$ space, even when forced to arbitrary depth.
 
 Like 2-3 finger trees, other stream candidates offering $O(1)$ deque operations do not support safe {\tt cons} or constant-space construction of repeating streams. This includes:
 
@@ -202,7 +203,7 @@ Otherwise, it just appends the new head as a tree of size 1.
 In this implementation of random access lists, \verb|let bees = cons 'b' bees| produces $\bot$.
 The cons operation must inspect the new tail before constructing the head.
 On \verb|bees|, this is not a terminating operation.
-Of course, \verb|bees| can be constructed if we avoid cons, as shown in Figure~\ref{infiniteSkew}.
+Of course, \verb|bees| can be constructed if we avoid cons, as shown in Fig.~\ref{infiniteSkew}.
 Despite this work-around, cons is still an unsafe operation.
 %TODO: is it the culprit? cons also inspects the *value* of the list
 The culprit is the flexibility in the shape of the random access list.
@@ -216,7 +217,7 @@ For instance, the stream \verb|ones| mentioned above can be stored in a Braun st
 Finger trees and skew lists, on the other hand, will both allocate $O(\log i)$ memory when the $i$th element is retrieved.
 \end{comment}
 
-\section{Braun streams}
+\section{Braun Streams}
 
 Braun streams are simply infinite full binary trees.
 The $0$th element is stored in the root of the tree, while odd-indexed elements appear in the left subtree and even-indexed elements appear in the right.
@@ -227,7 +228,7 @@ To make this recursive relation clear, we index Braun streams by finite lists of
 The root element is indexed by the empty list.
 The odd-indexed elements are indexed by lists that start with \verb|True|, the even-indexed elements by lists that start with \verb|False|.
 There is an obvious bijection between finite lists of booleans and integers;
-it is expressed in \verb|ord| and \verb|list| in Figure~\ref{basicCode}.
+it is expressed in \verb|ord| and \verb|list| in Fig.~\ref{basicCode}.
 
 \begin{figure}
 \begin{alltt}
@@ -253,9 +254,10 @@ See Figure~\ref{braunDef} for the definition of the {\tt BS} datatype.}
 \label{basicCode}
 \end{figure}
 
-\section{Building Braun streams from linear streams}
+\section{Building Braun Streams from Linear Streams}
+\label{iterSect}
 
-The algorithm for building a Braun stream from a linear stream (along with supporting code) is displayed in Figure~\ref{iterateCode}.
+The algorithm for building a Braun stream from a linear stream (along with supporting code) is displayed in Fig.~\ref{iterateCode}.
 
 \begin{figure}
 \begin{alltt}
@@ -293,7 +295,7 @@ if
 \end{displaymath}
 then
 \begin{displaymath}
-(\oddFrom f\ (f^{2^k-1}x)\ e)@b = f^{2^k\ord{b}+2^k-1}x
+(\oddFrom f\ (f^{2^k-1}x)\ e)@b = f^{2^k\ord{b}+2^k-1}x\enspace.
 \end{displaymath}
 \end{lemma}
 \begin{proof}
@@ -440,51 +442,55 @@ With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\
 \qed
 \end{proof}
 
-\section{Cycling possibly finite lists}
+\section{Cycling Possibly Finite Lists}
 
-As shown in Section~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ takes $\Omega(\log i)$ space in indexable deques.
+As shown in Sect.~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ takes $\Omega(\log i)$ space in indexable deques.
 If constructed properly, a cyclic stream with cycle length $m$ can be represented as a Braun stream in $O(m^2)$ space.
 This section describes an algorithm to produce a cyclic Braun stream of minimal size.
 
-To be explicit about how much memory a Braun stream is using, we will use a representation of a Braun stream that can have leaves:
+In our implementation of Braun streams in a Haskell library, sharing is indicated to the compiler by reusing the same variable more than once in an expression \cite{website}.
+For the purposes of the proofs in this section, it will help to be explicit about how much memory a Braun stream is using by using a representation that can have leaves, as follows:
 
 \begin{alltt}
 data Share a = Branch a (Share a) (Share a)
              | Ref [Bool]
 \end{alltt}
 
-The type {\tt Share} has a constructor {\tt Ref} that contains an integer.
+The type \share has a constructor {\tt Ref} that contains an integer.
 This integer represents the location in the stream thet the stream at the {\tt Ref} shares with.
-For instance, the stream {\tt smallEyes} in Figure~\ref{braunShare} could be represented as a {\tt Share} as {\tt Branch 'i' (Ref []) (Ref [])}.
+For instance, the stream {\tt smallEyes} in Fig.~\ref{braunShare} could be represented as a \share as {\tt Branch 'i' (Ref []) (Ref [])}.
 References are context dependent, so the locations that are {\tt Ref []} in 
 \\
 {\tt Branch 'j' (Ref []) (Branch 'i' (Ref []) (Ref []))}
 \\
 refer back to the Braun stream with 'j' at the head.
 
-A {\tt Share} is called {\em well-formed} if, for every {\tt Ref b} at location $l$, $\ord{b} < \ord{l}$.
-This ensures that finding the value at any location in a Braun stream represented by a well-formed {\tt Share} terminates.
-Attempting to find a value in a well-formed {\tt Share} at location $b$ obviously succeeds if $b$ is a valud path in the tree.
+
+A \share is called {\em well-formed} if, for every {\tt Ref b} at location $l$, $\ord{b} < \ord{l}$.
+This ensures that finding the value at any location in a Braun stream represented by a well-formed \share terminates.
+Attempting to find a value in a well-formed \share at location $b$ obviously succeeds if $b$ is a valid path in the tree.
 If it is not, it must be interrupted by a leaf.
 Assume the leaf is at location $l$ and points to location $p$.
 Then there is some finite list of booleans $r$ such that $l \app r = b$.
 This is the remainder of $b$ that was not followed because the search was interrupted by the leaf at $l$.
 Following the reference at $l$ would point us to the location $\ord{p \app r}$.
 Since $\ord{p} < \ord{l}$, $\ord{p \app r} < \ord{l \app r} = \ord{b}$.
-Thus, following a reference in a well-formed {\tt Share} points to a smaller location, ensures that following references terminates.
+Thus, following a reference in a well-formed \share points to a smaller location, ensures that following references terminates.
 We will call the process of following a reference ``{\em resolving} a reference''.
 
-A well-formed {\tt Share} is equivalent to a Braun stream without sharing when, for all locations $b$, the value of the {\tt Share} at location $b$ (after followign references) is equal to the value of the Braun stream at location $b$.
+A well-formed \share is equivalent to a Braun stream without sharing when, for all locations $b$, the value of the \share at location $b$ (after followign references) is equal to the value of the Braun stream at location $b$.
 
-Now, for $m \in \mathbb{N}$ odd, let $\beta_m$ denote the size of the subgroup of $\mathbb{Z}_m^*$ generated by $2$.
+\subsection{Minimum Size of Cyclic Braun Streams}
+
+For odd $m \in \mathbb{N}$, let $\beta_m$ denote the size of the subgroup of $\mathbb{Z}_m^*$ generated by $2$, and $1$ when $m$ is $1$.
 \begin{lemma}
 \label{cycleSize}
-A Braun stream with cycle length $2^r m$ where $m$ is odd can be represented with a {\tt Share} of size $2^{r+1} m \beta_m + 2^{r+1} - 1$.
-%Furthermore, if every element in the cycle is distinct, it cannot be represented by a {\tt Share} of any smaller size.
+A Braun stream with cycle length $2^r m$ where $m$ is odd can be represented with a \share of size $2^{r+1} m \beta_m + 2^{r+1} - 1$.
+%Furthermore, if every element in the cycle is distinct, it cannot be represented by a \share of any smaller size.
 \end{lemma}
 \begin{proof}
-For a list {\tt x:xs} with length $n = 2^r m$, we must produce a {\tt Share} bisimilar to {\tt bcycle x xs}:
-
+For a list {\tt x:xs} with length $n = 2^r m$, we must produce a \share bisimilar to {\tt bcycle x xs}:
+\\
 \begin{alltt}
 lcycle :: a -> [a] -> LStream a
 lcycle x xs = 
@@ -498,10 +504,10 @@ bcycle x xs = fromLStream (lcycle x xs)
 \end{alltt}
 
 Converting {\tt lcycle x xs} to a stream with {\tt fromLStream} produces 
-
+\\
 {\tt fmap lhead (iterate ltail (lcycle x xs))}
 
-Additionally, using Theorem~\ref{iterateCorrect}, it is trivial to prove that {\tt iterate} is equivalent to
+Also, using Theorem~\ref{iterateCorrect}, it is trivial to prove that {\tt iterate} is equivalent to
 
 \begin{alltt}
 iterateSlow :: (a -> a) -> a -> BS a
@@ -520,26 +526,26 @@ Applying this to {\tt bcycle x xs}, we see that every location in this Braun str
 {\tt fmap lhead (iterate (ltail}$^{2^i}${\tt ) (ltail}$^j\ ${\tt (lcycle x xs)))} 
 \\
 for some $i$ and $j$.
-We denote the stream at such a location with $\langle 2^i,j \rangle$, which we call its {\em address}.
+We denote the stream at such a location $\langle 2^i,j \rangle$, which we call its {\em address}.
 The members of this pair are called the {\em increment} and {\em offset}, respectively.
 On any cyclic {\tt LStream} {\tt ys} with cycle length $n$, {\tt ltail}$^k\ ${\tt ys} is bisimilar to {\tt ltail}$^l\ ${\tt ys} whenever $k \equiv l \mod n$.
-Therefore, the streams at any two addresses $\langle i,j \rangle$ and $\langle k,l \rangle$ in the Braun stream {\tt bcycle x xs} are bisimilar if $i \equiv k \mod n$ and $j \equiv l \mod n$.
+Therefore, the streams $\langle i,j \rangle$ and $\langle k,l \rangle$ in the Braun stream {\tt bcycle x xs} are bisimilar if $i \equiv k \mod n$ and $j \equiv l \mod n$.
 
 This implies that there are at most $n^2$ distinct substreams of {\tt bcycle x xs}.
 With appropriate sharing, then, a {\tt bcycle x xs} can be represented by a tree with at most $n^2$ internal nodes.
 Out goal will be to show that it can be represented by a tree with $2^r m \beta_m + 2^r - 1$ internal nodes.
-Since a tree with $q$ internal nodes has $q+1$ leaves, this will prove the lemma.
+Since a tree with $q$ internal nodes has $q+1$ leaves, this will complete the lemma.
 We proceed by induction on $r$. 
 
 If $r$ is $0$, the cycle length is odd.
 Since each distinct stream location is $\langle 2^i,j \rangle$ for some $i, j$, there are at most $\beta_m m$ stream locations.
 
-For the induction step, assume $r = s+1$ and any cycle of length $2^s m$ can be represented by a {\tt Share} with $2^s m \beta_m + 2^s - 1$ internal nodes.
+For the induction step, assume $r = s+1$ and any cycle of length $2^s m$ can be represented by a \share with $2^s m \beta_m + 2^s - 1$ internal nodes.
 By our definition of {\tt iterateSlow}, it is clear that the left subtree of {\tt bcycle x xs} is {\tt fmap lhead (iterate (ltail}$^2${\tt ) (ltail (lcycle x xs)))}.
 However, since {\tt ltail (lcycle x xs)} has even cycle length, {\tt (iterate (ltail}$^2${\tt ) (ltail (lcycle x xs)))} is cyclic with cycle length $n/2$;
 it is simply every second element of {\tt (x:xs)}, cycled.
 By our induction hypothesis, this Braun stream can be represented by a share with $2^s m \beta_m + 2^s - 1$ internal nodes.
-The same applies to the right subtree of {\tt bcycle x xs}.
+A similar argument applies to the right subtree of {\tt bcycle x xs}.
 Their number of internal nodes, including the internal node at the root of the {\tt Share}, is thus $1+2*(2^s m \beta_m + 2^s - 1) = 2^r m \beta_m + 2^r - 1$.
 \qed
 \end{proof}
@@ -547,7 +553,7 @@ Their number of internal nodes, including the internal node at the root of the {
 In fact, this is the best we can do.
 
 \begin{lemma}
-A Braun stream {\tt bcycle x xs} with cycle length $n = 2^r m$ where $m$ is odd and there are $n$ distinct values cannot be represented with a well-formed {\tt Share} of size less than $2^{r+1} m \beta_m + 2^{r+1} - 1$.
+A Braun stream {\tt bcycle x xs} with $n$ distinct elements and cycle length $n = 2^r m$ where $m$ is odd cannot be represented with a well-formed \share of size less than $2^{r+1} m \beta_m + 2^{r+1} - 1$.
 \end{lemma}
 \begin{proof}
 
@@ -556,24 +562,24 @@ If $r$ is $0$, $n$ is odd.
 We first show that every pair $\langle i'=2^i,j \rangle$ is represented in the stream.
 Since $n$ is odd, $2^i \mod n$ takes on every value in $|\langle 2 \rangle|$ (the subgroup of $\mathbb{Z}_n^*$ generated by $2$) infinitely often.
 In particular, $2^{i+\beta_n} \equiv 2^i \mod n$.
-Additionally, for $i > \log_2 n$, the offsets of the nodes at level $i$, when sorted, form a contiguous chain of length $2^i$.
+Additionally, for $i > \log_2 n$, the offsets of the nodes at level $i$, when sorted, form a contiguous chain of natural numbers of length $2^i$.
 Thus, every value of $\mathbb{Z}_n$ is congruent to the offset of some node at level $i$.
 
 Every pair in $\langle 2 \rangle \times \mathbb{Z}_n$ is the address of some location in the stream.
 Every pair of locations with distinct addresses resolve to two streams that are not bisimilar, since the cycle has $n$ distinct values.
-Additionally, since the {\tt Share} is well-formed, such a pair can be resolved to two distinct internal nodes.
-This shows that the {\tt Share} must have at least $|\langle 2 \rangle \times \mathbb{Z}_n| = \beta_m m$ internal nodes.
+Additionally, since the \share is well-formed, such a pair of locations can be resolved to two distinct internal nodes.
+This shows that the \share must have at least $|\langle 2 \rangle \times \mathbb{Z}_n| = \beta_m m$ internal nodes.
 With the additional $\beta_m m + 1$ leaves, the entire tree is at least size $2 \beta_m m + 1$.
 
-For the induction step, assume $r = s+1$ and no cycle of length $2^s m$ can be represented by a {\tt Share} with fewer than $2^s m \beta_m + 2^s - 1$ internal nodes.
+For the induction step, assume $r = s+1$ and no cycle with $2^s m$ distinct elements and cycle length $2^s m$ can be represented by a \share with fewer than $2^s m \beta_m + 2^s - 1$ internal nodes.
 As before, the left subtree and right subtrees of {\tt bcycle x xs} are {\tt fmap lhead (iterate (ltail}$^2${\tt ) (ltail}$^{\{1,2\}}\ ${\tt (lcycle x xs)))}, respectively.
 Again, since {\tt ltail (lcycle x xs)} has even cycle length, and the subtrees are cyclic with cycle length $n/2$.
 The left tree is every second element of {\tt (x:xs)} (starting at the second element), cycled.
-The left tree is every second element of {\tt (x:xs)} (starting at the third element, with {\tt x} appended at the end), cycled.
+The left tree is every second element of {\tt (x:xs)} (starting at the third element and with {\tt x} appended at the end), cycled.
 These lists are disjoint by assumption, so the left and right subtrees cannot have any inter-tree sharing.
 Similarly, the root cannot share with either subtree, since it is cyclic with cycle length $n$ and contains values from both odd numbered and even numbered positions in {\tt (x:xs)}.
 
-By our induction hypothesis, the left and right subtrees cannot be represented by a {\tt Share} with fewer than $2^s m \beta_m + 2^s - 1$ internal nodes.
+By our induction hypothesis, the left and right subtrees cannot be represented by {\tt Share}s with fewer than $2^s m \beta_m + 2^s - 1$ internal nodes.
 The number of internal nodes, including the internal node at the root of the {\tt Share}, is thus $1+2*(2^s m \beta_m + 2^s - 1) = 2^r m \beta_m + 2^r - 1$.
 With the leaves, this makes the tree at least size $2^{r+1} m \beta_m + 2^{r+1} - 1$
 \qed
@@ -583,12 +589,80 @@ When $m$ is $1$, $n$ is a power of $2$, and the cyclic Braun stream can be as sm
 When $\beta_n = n-1$, this tree can be as large as $2n(n-1)+1$.
 A unsolved 90-year-old conjecture of Artin proposes that this occurs infinitely often \cite{artin}.
 
+\subsection{Algorithm for Producing Minimal Cyclic Braun Streams}
+\label{cycleAlgo}
+It shall now be our goal to produce a well-formed \share that achieves this minimum size.
+Though the process is straightforward, there are many details to track.
+Haskell code for producing such a \share is in Fig.~\ref{cycleDetails}.
 
+\begin{figure}
+\begin{alltt}
+floorlg2 x = case x `div` 2 of
+               0 -> 0
+               y -> 1 + floorlg2 y
 
+myincr real len = mod (2^(floorlg2 (1+real))) len
 
+memo n (p,i) =
+    case (compare p n, compare i (myincr p n)) of
+      (LT,EQ) -> Just p
+      _ -> Nothing
 
+type Fin x = (x,x,(x,x) -> Maybe x)
+type Unk x a = (a,[a],x)
+type Trak' x a = Either (Fin x) (Unk x a)
+type Trak a = Trak' Integer a
+
+action :: Trak a -> Trak a
+action (Left (real,len,f)) =
+    Left (real+1,len,
+          case f (mod real len, myincr real len) of
+            Just _ -> f
+            Nothing -> 
+                (\(\backslash\)(p,i) ->
+                 if (p == mod real len) && (i == myincr real len)
+                 then Just real
+                 else f (p,i)))
+action (Right (_,[],sofar)) = Left (1+sofar,1+sofar,memo (1+sofar))
+action (Right (_,hed:tyl,sofar)) = Right (hed,tyl,1+sofar)
+
+trunc :: [a] -> BS (Trak a) -> BraunRef a
+trunc whole (BS (Left (real,len,f)) od ev) =
+    case f (mod real len,myincr real len) of
+      Just bak -> Ref (order bak)
+      Nothing -> Branch (whole `genericIndex` (mod real len)) 
+                        (trunc whole od) 
+                        (trunc whole ev)
+trunc whole (BS (Right (hed,c,n)) od ev) =
+    Branch hed (trunc whole od)
+               (trunc whole ev)
+
+smallCycle hed tyl =
+  trunc (hed:tyl)
+    (iterate action (Right (hed,tyl,0)))
+\end{alltt}
+\caption{Haskell code for producing a minimal \share the represents a cyclic stream.}
+\label{cycleDetails}
+\end{figure}
+
+One additional detail we must deal with is that the algorithm must correctly deal with infinite input.
+Furthermore, the input cannot be determined to be infinite by its shape.
+
+In order to build a minimal well-formed {\tt Share}, we must ensure that no internal node shares an address with location with a smaller location;
+For any address $a$, only the first location with that address should be an internal node.
+All other locations in the \share with the same address should be {\tt Ref}s.
+%(Of course, there will be an infinite number of locations in an equivalent Braun stream with the same address; in a finite share some of these 
+
+We do so by using the iterate algorithm designed in Sect.~\ref{iterSect}.
+By proceeding through the locations in order, we can ensure that later locations do not share addresses with earlier ones.
+To track earlier addresses, the iterated function {\tt action} acts on a partial map from addresses to locations of previously seen internal nodes.
+To track the address as a function of the location, {\tt action} also acts on the location 
+
+\begin{comment}
+In the code above, the central detail is the function {\tt action}.
+This function decom
+Formally, Haskell datatypes are closer to coinductive types than inductive types, as the latter as forced to be 
 To formalize and clarify the sharing, a cyclic Braun stream will be built with explicit sharing.
-
 To ensure that the sharing is done correctly, we use {\tt iterate}.
 The functino we pass to iterate must:
 \begin{itemize}
@@ -596,19 +670,14 @@ The functino we pass to iterate must:
 \item Collect a list of pairs $\langle i,j \rangle$ representing the locations in $\mathbb{Z}_m \times \mathbb{Z}_m$ that already have locations in the stream associated with them
 \item Calculate a new pair based only on stream location
 \end{itemize}
-
 An appropriate such function is in Figure 
 It produces (and consumes) a triple consisting of the real location in the stream (0-indexed), the cycle length, and a partial function mapping pairs $\langle i,j \rangle$ to stream locations.
 From these triples, the function {\tt truncateFinite} 
-
-
 \begin{figure}
 \begin{alltt}
 data Share a = Branch a (Share a) (Share a)
              | Ref Integer
-
 type Triple = (Integer,Integer,(Integer,Integer) -> Maybe Integer)
-
 finiteCycleAction :: Triple -> Triple
 finiteCycleAction (location,m,previous) =
   (location+1,m,
@@ -622,17 +691,14 @@ finiteCycleAction (location,m,previous) =
                   (Eq,Eq) -> Just location
                   _ -> previous (incr, offs)
           in current)
-
 floorlg2 :: Integer -> Integer
 floorlg2 x = 
   case x `div` 2 of
     0 -> 0
     y -> 1 + floorlg2 y
-
 incrementOf :: Integer -> Integer -> Integer
 incrementOf location m =
   (2^(floorlg2 (1+location))) `mod` m
-
 truncateFinite :: BS Triple -> BraunRef Integer
 truncateFinite (BS (loc,m,prev) od ev) =
   let incrHere = incrementOf loc m
@@ -642,10 +708,6 @@ truncateFinite (BS (loc,m,prev) od ev) =
        Nothing -> BS offsetHere 
                      (truncateFinite od)
                      (truncateFinite ev)
-
-
-
-
             match f (mymod real mod,myincr real mod) with
               | None => Conr 
                         (mat whole real)
@@ -659,23 +721,16 @@ truncateFinite (BS (loc,m,prev) od ev) =
             (truncate whole ev)
         end
     end.
-
-
 floorlg2 (x:nat) \{measure id x\} :nat :=
   match div2 x with
     | 0 => 0
     | y => S (floorlg2 y)
   end.
-
 Definition myincr real mod := 
   mymod (pow 2 (floorlg2 (S real))) mod.
-
-
-
 CoInductive BraunRef (A:Set) : Set :=
 | Conr : A -> BraunRef A -> BraunRef A -> BraunRef A
 | Ref : nat -> BraunRef A.
-
 Definition action 
   (A:Set) 
   (x:nat*nat*(nat*nat->option nat))
@@ -703,7 +758,6 @@ Definition action
         | Cons hed tl => inr _ (hed,tl,S sofar)
       end
   end.
-
 CoFixpoint truncate (A:Set) (whole:A * CoList A)
   (x:Braun ((nat*nat*(nat*nat->option nat))+(A * CoList A * nat)))
     : BraunRef A :=
@@ -724,47 +778,32 @@ CoFixpoint truncate (A:Set) (whole:A * CoList A)
             (truncate whole ev)
         end
     end.
-
 \end{alltt}
 \caption{}
 \label{braunRef}
 \end{figure}
-
-
 Assume {\tt xs} is finite and of length $m$.
 Then {\tt (ltail}$^j\ ${\tt (lcycle x xs))} is {\tt lcycle y ys} where 
-
 {\tt y:ys == let k = j `mod` (m+1) in drop k (x:xs) ++ take k (x:xs)}.
-
 Thus, {\tt (ltail}$^j\ ${\tt (lcycle x xs))} is bisimilar to {\tt (ltail}$^l\ ${\tt (lcycle x xs))} whenever $j \equiv l \mod (m+1)$.
 Similarly, if {\tt ys} is a cyclic {\tt LStream} with cycle length $m+1$, {\tt (iterate (ltail}$^{2^i}${\tt ) ys}
-
-
 We want fromLStream (lcycle x xs)
-
-
-
 \begin{alltt}
 CoFixpoint iterateSlow (A:Set) F (x:A) : Braun A :=
   let g := fun z => F (F z) in
     let y := F x in
       Conb x (iterateSlow g y)
              (iterateSlow g (F y)).
-
 cycle x xs 
 \end{alltt}
-
 \begin{alltt}
-
 Function floorlg2 (x:nat) \{measure id x\} :nat :=
   match div2 x with
     | 0 => 0
     | y => S (floorlg2 y)
   end.
-
 Definition myincr real mod := 
   mymod (pow 2 (floorlg2 (S real))) mod.
-
 Function mymod (n:nat) (m:nat) \{measure id n\} : nat :=
   match m with
     | 0 => 0
@@ -775,7 +814,6 @@ Function mymod (n:nat) (m:nat) \{measure id n\} : nat :=
         | Gt => mymod (n-m) m
       end
   end.
-
 Definition action 
   (A:Set) 
   (x:(nat*nat*(nat*nat->option nat))
@@ -805,14 +843,11 @@ Definition action
         | Cons hed tl => inr _ (hed,tl,S sofar)
       end
   end.
-
 CoInductive CoList (A:Set) : Set :=
 | Nil : CoList A
 | Cons : A -> CoList A -> CoList A.
-
 CoInductive Braun (A:Set) : Set :=
 | Conb : A -> Braun A -> Braun A -> Braun A.
-
 Fixpoint mat' (A:Set) (whole:A * CoList A) (rem:CoList A) n :=
   match n with
     | 0 => 
@@ -826,10 +861,8 @@ Fixpoint mat' (A:Set) (whole:A * CoList A) (rem:CoList A) n :=
         | Cons _ rest => mat' whole rest m
       end
   end.
-
 Definition mat (A:Set) (whole:A * CoList A) (n:nat) : A :=
   mat' whole (let (hed,tyl) := whole in Cons hed tyl) n.
-
 CoFixpoint truncate (A:Set) (whole:A * CoList A)
   (x:Braun ((nat*nat*(nat*nat->option nat))+(A * CoList A * nat)))
     : BraunRef A :=
@@ -850,35 +883,53 @@ CoFixpoint truncate (A:Set) (whole:A * CoList A)
             (truncate whole ev)
         end
     end.
-
 Definition cycle A hed tyl :=
        truncate (hed,tyl) 
          (iterate (@action A) (inr _ (hed,tyl,0))).
-
 \end{alltt}
+\end{comment}
 
-\section{Formalizing the proof of correctness}
+\section{Formalization in Coq}
 
+Some of the details of the algorithms presented above have been formalized in the Coq proof assistant \cite{coq,website}.
+
+One of the advantages of formalizing proofs of functional algorithms in Coq is that the data structures and algorithms can sometimes be directly embedded in Coq using its built-in syntax for inductive and coinductive types as well as recursive functions.
+For the algorithms in this paper, direct embedding was only partially possible.
+
+For instance, Coq requires functions producing values of coinductive types to be {\em productive}.
+This condition as enforced in Coq is similar to the requirement that functions consuming values of inductive types be structurally recursive.
+The iterate algorithm presented in Sect.~\ref{iterSect} is productive because of the way the two subtrees are interrelated, and is not obviously productive in the eyes of Coq.
+Instead of proving this function productive directly, it was rewritten as an inductive function, then proved terminating using some of Coq's more sophistacted methods for writing recursive functions, like well-founded induction.
+The correctness of iterate is proved separately from this definition, in a module that simply assumes a definition matching the Haskell one given in Fig.~\ref{iterateCode}.
+
+In some cases, direct embedding in Coq was both possible and even more usable that the Haskell code so embedded.
+As noted in Subsect.~\ref{cycleAlgo}, Haskell lists may actually be streams.
+Though this is sometimes a desired characteristic, as in the input to cycle, but in some cases it does not reflect the actual desired meaning of the program.
+For instance, Braun streams are only indexed by finite lists of boolean values.
+Coq distinguishes between data structures that can be infinite (coinductive types) and those that must be finite (inductive types).
+This difference helps Coq accurately model both intended uses, unlike Haskell.
+
+\begin{comment}
 how many lines?
-
 how many generated lines?
-
 hiccups:
 * subtraction
 * repeated function application not built-in (show equal to another formulation)
-* proving termination separately
+\end{comment}
 
-\section{Conclusions}
+\section{Conclusion}
 
 Is there a data structure that provides terminating constant-time \verb|cons|?
 
-Also good for Braun trees, because can get index i in time $i$, not $n+i$
+Also good for finite Braun trees, because can get index i in time $i$, not $n+i$
 
 Formalizing in a language with extraction
 
 Formalizing time and space complexity
 
-\bibliographystyle{plain}
+complete formalization
+
+\bibliographystyle{splncs}
 \bibliography{braun}
 
 \end{document}
