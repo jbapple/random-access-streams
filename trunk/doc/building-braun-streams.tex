@@ -186,7 +186,7 @@ The $0$th element is stored in the root of the tree, while odd-indexed elements 
 The subtrees of a Braun tree are also Braun trees, after reindexing by order.
 %That is, the 0th entry of any subtree is at its root, and its 1st, 3rd, 5th, ... elements are in its left subtree, etc.
 
-To make this recursive relation clear, we index Braun streams by finite lists of booleans.
+To make this recursive relation clear, Braun streams are indexed by finite lists of booleans.
 The root element is indexed by the empty list.
 The odd-indexed elements are indexed by lists that start with \verb|True|, the even-indexed elements by lists that start with \verb|False|.
 There is an simple bijection between finite lists of booleans and natural numbers;
@@ -285,7 +285,7 @@ then
 \end{displaymath}
 \end{lemma}
 \begin{proof}
-We prove this by structural induction on $b$. If $b = \nil$, then 
+The proof proceeds by structural induction on $b$. If $b = \nil$, then 
 \begin{displaymath}
 \begin{array}{rcl}
 (\oddFrom f\ (f^{2^k-1}x)\ e)@b & = & (\oddFrom f\ (f^{2^k-1}x)\ e)@\nil \\
@@ -321,7 +321,7 @@ So, $\ord{\cons{\false}{g}} < \ord{b}$, and
 \end{array}
 \end{displaymath}
 
-Since this holds for all $g < d$ we can invoke the induction hypothesis with $k := k+1$ and $e := \evens e$.
+Since this holds for all $g < d$ the induction hypothesis can be invoked with $k := k+1$ and $e := \evens e$.
 This implies that
 
 \begin{displaymath}
@@ -361,7 +361,7 @@ f((\odds e)@d) & = & f(e@(\cons{\true}{d})) & = & f(f^{2^k\ord{\cons{\true}{d}}+
 \end{proof}
 
 The full strength of Lemma~\ref{oddFromLemma} is only really needed in the induction hypothesis.
-The statement we need for the main proof of \verb|iterate| fixes $k$ at $1$:
+The statement needed for the main proof of \verb|iterate| fixes $k$ at $1$:
 
 \begin{corollary}\label{oddFromCorollary}
 For any $f, b, x, e$
@@ -383,7 +383,7 @@ then
 \end{theorem}
 \begin{proof}
 
-We proceed by well-founded induction on $\ord{b}$.
+The proof is by well-founded induction on $\ord{b}$.
 If $b = \nil$, the equality is trivial.
 Otherwise, let $b = \cons{a}{d}$.
 There is a lemma that is needed whether $a$ is $\true$ or $\false$:
@@ -399,7 +399,7 @@ This is a direct result of the corollary as long as
 \forall j, \ord{j} < \ord{d} \implies \ev @j = f^{2\ord{j}+2}
 \end{displaymath}
 
-Since $\ord{j} < \ord{d}$, $2\ord{j}+2 < 2\ord{d}+2 \leq \ord{b}$, we can apply the induction hypothesis to $2\ord{j}+2 = \ord{\cons{\false}{j}}$:
+Since $\ord{j} < \ord{d}$, $2\ord{j}+2 < 2\ord{d}+2 \leq \ord{b}$, the induction hypothesis can be applied to $2\ord{j}+2 = \ord{\cons{\false}{j}}$:
 
 \begin{displaymath}
 \begin{array}{rcl}
@@ -438,7 +438,7 @@ This section describes an algorithm to produce a cyclic Braun stream of minimal 
 In our implementation of Braun streams in a Haskell library, sharing is induced by reusing the same variable more than once in an expression \cite{website}.
 For the purposes of the proofs in this section, it will help to be explicit about how much memory a Braun stream occupies by using a representation that can have leaves.
 This representation is presented as the datatype {\tt Share} in Fig.~\ref{shareDef}.
-The leaves contain lists of booleans; we call these {\em pointers}, and they correspond to locations as in Fig.~\ref{basicCode}.
+The leaves contain lists of booleans; these are called {\em pointers}, and they correspond to locations as in Fig.~\ref{basicCode}.
 In {\tt Share}s, unlike in Braun streams, some locations are {\em invalid} because the path from the root to the location is interrupted by a leaf.
 
 A pointer or location $b$ can be {\em traced} in a \share $s$, producing a value from $s$, as in {\tt trace} in Fig.~\ref{traceDef}.
@@ -470,42 +470,13 @@ trace g b = context g g b
 
 Tracing a location in a \share may not always produce a value.
 For example, in a {\tt Share} with only one node, like {\tt Ref [True]}, no locations trace to values.
-If every list of booleans traces to a value in a \share $s$, we say $s$ is {\em well-formed}.
-In that case, we denote the trace of $l$ in $s$ by $s@l$.
+If every list of booleans traces to a value in a \share $s$, $s$ is called {\em well-formed}.
+In that case, the trace of $l$ in $s$ is denoted by $s@l$.
 This is the same notation as indexing in Braun streams, which facilitates the following definition:
 
 \begin{definition}
 A Braun stream or well-formed \share $a$ is {\em equivalent} to a Braun stream or well-formed \share $b$ when $a@l = b@l$ for all $l$.
 \end{definition}
-
-\begin{comment}
-The type \share has a constructor {\tt Ref} that contains an list of booleans.
-We call this list a {\em pointer}; a pointer represents a location.
-a pointer $p$ at location $l$ indicates that the it points to a location in the stream that is bisimilar to the location in the stream that the stream at the {\tt Ref} shares with.
-For instance, the stream {\tt smallEyes} in Fig.~\ref{braunShare} could be represented as a \share as {\tt Branch 'i' (Ref []) (Ref [])}.
-References are context dependent, so the locations that are {\tt Ref []} in 
-{\tt Branch 'j' (Ref []) (Branch 'i' (Ref []) (Ref []))}
-refer back to the Braun stream with 'j' at the head.
-If in a \share $s$ every list of booleans traces to a value, we say $s$ is {\em valid}.
-A \share is called {\em well-formed} if, for every {\tt Ref b} at location $l$, $\ord{b} < \ord{l}$.
-A valid \share can be transformed into a well-formed \share of equivalent size.
-First, ensure every {\tt Ref} points to a {\tt Branch}.
-This is possible since a {\tt Ref} at location $b$ traces (by the validity of $s$) to a {\tt Branch}.
-This does not increase the size of the tree at all, as it simple replaces the pointers at certain {\tt Ref}s
-Now if any {\tt Ref}s point to {\tt Branch}es with higher-numbered locations, 
-Let $s$ be a valid {\tt Share}, and let $b$ point to a {\tt Ref} in $s$ that 
-This ensures that finding the value at any location in a Braun stream represented by a well-formed \share terminates.
-Attempting to find a value in a well-formed \share at location $b$ obviously succeeds if $b$ is a valid path in the tree.
-If it is not, it must be interrupted by a leaf.
-Assume the leaf is at location $l$ and refers to location $p$.
-Then there is some finite list of booleans $r$ such that $l \app r = b$.
-This is the remainder of $b$ that was not followed because the search was interrupted by the leaf at $l$.
-Following the reference at $l$ would point us to the location $\ord{p \app r}$.
-Since $\ord{p} < \ord{l}$, $\ord{p \app r} < \ord{l \app r} = \ord{b}$.
-Thus, following a reference in a well-formed \share points to a smaller location, ensuring that following references terminates.
-We will call the process of following a reference ``{\em resolving} a reference''.
-In fact, any valid share is equivalent to a well-formed shares 
-\end{comment}
 
 \subsection{Minimum Size of Cyclic Braun Streams}
 
@@ -517,7 +488,7 @@ A Braun stream with cycle length $2^r m$ where $m$ is odd can be represented wit
 %Furthermore, if every element in the cycle is distinct, it cannot be represented by a \share of any smaller size.
 \end{lemma}
 \begin{proof}
-For a list {\tt x:xs} with length $n = 2^r m$, we must produce a \share bisimilar to {\tt bcycle x xs}:
+For a list {\tt x:xs} with length $n = 2^r m$, a \share bisimilar to {\tt bcycle x xs} must be produced:
 
 \begin{alltt}
 lcycle :: a -> [a] -> LStream a
@@ -549,12 +520,12 @@ iterateSlow f x =
 Though this definition is much more intuitive, it is also much less efficient, as {\tt f} is applied to the same values repeatedly.
 It shows that every location in the Braun stream $\iter f x$ is equivalent to $\iter f^{2^i}\ (f^j x)$ for some values of $i$ and $j$.
 
-Applying this to {\tt bcycle x xs}, we see that every substream of this Braun stream is equivalent to 
+Applying this to {\tt bcycle x xs}, every substream of this Braun stream is equivalent to 
 \\
 {\tt fmap lhead (iterate (ltail}$^{2^i}${\tt ) (ltail}$^j\ ${\tt (lcycle x xs)))} 
 \\
 for some $i$ and $j$.
-We denote the stream at such a location $\langle 2^i,j \rangle$, which we call its {\em address}.
+The stream at such a location is denoted $\langle 2^i,j \rangle$, which is called its {\em address}.
 The members of this pair are called the {\em increment} and {\em offset}, respectively.
 On any cyclic {\tt LStream} {\tt ys} with cycle length $n$, {\tt ltail}$^k\ ${\tt ys} is bisimilar to {\tt ltail}$^l\ ${\tt ys} whenever $k \equiv l \mod n$.
 Therefore, the streams $\langle i,j \rangle$ and $\langle k,l \rangle$ in the Braun stream {\tt bcycle x xs} are equivalent if $i \equiv k \mod n$ and $j \equiv l \mod n$.
@@ -565,7 +536,7 @@ This implies that there are at most $n^2$ distinct substreams of {\tt bcycle x x
 With appropriate sharing, then, a {\tt bcycle x xs} can be represented by a {\tt Share} with at most $n^2$ internal nodes.
 Our goal will be to show that it can be represented by a {\tt Share} with $2^r m \beta_m + 2^r - 1$ internal nodes.
 Since a tree with $q$ internal nodes has $q+1$ leaves, this will complete the lemma.
-We proceed by induction on $r$. 
+The proof proceeds by induction on $r$. 
 
 If $r$ is $0$, the cycle length is odd.
 Since each address is $\langle 2^i,j \rangle$ for some $i, j$, by the definition of $\beta_m$, there are at most $\beta_m m$ distinct addresses $\mod m$.
@@ -581,7 +552,7 @@ Their number of internal nodes, including the internal node at the root of the {
 \qed
 \end{proof}
 
-In fact, this is the best we can do:
+In fact, this is optimal:
 
 \begin{lemma}
 \label{cycleSizeMin}
@@ -589,7 +560,7 @@ A Braun stream {\tt bcycle x xs} with $n$ distinct elements and cycle length $n 
 \end{lemma}
 \begin{proof}
 
-Again we proceed by induction on $r$.
+The proof is by induction on $r$.
 If $r$ is $0$, $n$ is odd.
 We first show that every address $\langle 2^i,j \rangle$ is present in the Braun stream.
 Since $n$ is odd, $2^i \mod n$ takes on every value in $\langle 2 \rangle$ (the subgroup of $\mathbb{Z}_n^{\times}$ generated by $2$) infinitely often.
