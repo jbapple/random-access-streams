@@ -166,58 +166,10 @@ Like 2-3 finger trees, other stream candidates offering $O(1)$ deque operations 
 \item Segmented binary lists, which offer $O(1)$ worst case {\tt cons} \cite{okasakiThesis}
 \end{itemize}
 
-What does linear time mean on infinite streams?
-
-\begin{comment}
-
-\begin{figure}
-\begin{alltt}
-data Tree a = Leaf a
-            | Node a (Tree a) (Tree a)
-type RAL a = [(Int,Tree a)]
-cons :: a -> RAL a -> RAL a
-cons x xs@((size1,t1) : (size2,t2) : rest) =
-    if size1 == size2
-    then (1 + size1 + size2, Node x t1 t2) : rest
-    else (1,Leaf x) : xs
-cons x xs = (1,Leaf x) : xs
-bees :: RAL Char
-bees = (1,Leaf 'b') : fmap (more 'b') bees
-    where 
-      more :: a -> (Int,Tree a) -> (Int,Tree a)
-      more v (n,t) = (1 + 2*n, Node v t t)
-badbees :: RAL Char
-badbees = cons 'b' badbees
-\end{alltt}
-\caption{The type of skew binary random access lists and the cons operation \cite{okasakiSkewLists}.
-The stream {\tt badbees} shows that, even though {\tt }}
-\label{consFail}
-\label{infiniteSkew}
-\end{figure}
-Figure~\ref{consFail} shows the datatype definition and cons operation for Okasaki's skew binary random access lists \cite{okasakiSkewLists}.
-In this representation, random access lists are linear lists containing perfectly balanced binary trees stored in order of increasing depth.
-No two trees in the list are the same size unless they are the two smallest trees in the list, and no three trees in the list are ever the same size.
-When the two smallest trees are the same size, the cons operation glues them together with the new head of the list.
-Otherwise, it just appends the new head as a tree of size 1.
-% \perp? doesn't terminate? has no WHNF?
-In this implementation of random access lists, \verb|let bees = cons 'b' bees| produces $\bot$.
-The cons operation must inspect the new tail before constructing the head.
-On \verb|bees|, this is not a terminating operation.
-Of course, \verb|bees| can be constructed if we avoid cons, as shown in Fig.~\ref{infiniteSkew}.
-Despite this work-around, cons is still an unsafe operation.
-%TODO: is it the culprit? cons also inspects the *value* of the list
-The culprit is the flexibility in the shape of the random access list.
-If the shape were fixed, 
-see if the list is of length $2$ or more before 
-To achieve these constant-time bounds, however, skew lists and finger trees relax their structural constraints. 
-This prevents some stream constructions from terminating. 
-For instance, \verb|cons| pattern matches on its second argument to determine its top-level constructor, so \verb|let ones = cons 1 ones| can never produce a top-level constructor.
-In addition, the complexity of the structural constraints on skew lists and finger trees increases the memory usage of certain streams.
-For instance, the stream \verb|ones| mentioned above can be stored in a Braun stream such that arbitrary indices may be retrieved without allocating more than a constant amount of memory.
-Finger trees and skew lists, on the other hand, will both allocate $O(\log i)$ memory when the $i$th element is retrieved.
-\end{comment}
+%What does linear time mean on infinite streams?
 
 \section{Braun Streams}
+\label{braunDef}
 
 Braun streams are simply infinite full binary trees.
 The $0$th element is stored in the root of the tree, while odd-indexed elements appear in the left subtree and even-indexed elements appear in the right.
@@ -449,40 +401,79 @@ If constructed properly, a cyclic stream with cycle length $m$ can be represente
 This section describes an algorithm to produce a cyclic Braun stream of minimal size.
 
 In our implementation of Braun streams in a Haskell library, sharing is indicated to the compiler by reusing the same variable more than once in an expression \cite{website}.
-For the purposes of the proofs in this section, it will help to be explicit about how much memory a Braun stream is using by using a representation that can have leaves, as follows:
+For the purposes of the proofs in this section, it will help to be explicit about how much memory a Braun stream occupies by using a representation that can have leaves.
+This representation is presented as the datatype {\tt Share} in Fig.~\ref{shareDef}.
+The leaves contain lists of booleans; we call these {\em pointers}, and they correspond to locations as in Sect.~\ref{braunDef}.
+In {\tt Share}s, unlike in Braun streams, some locations are {\em invalid} because they are cut off by a leaf.
 
+A pointer or location $b$ can be {\em traced} in a \share $s$, producing a value from $s$, as in {\tt trace} in Fig.~\ref{traceDef}.
+If $b$ is a valid location in $s$, it may point to either a {\tt Branch} or a {\tt Ref}.
+If it points to a {\tt Branch}, the value at that {\tt Branch} is the result of the trace.
+If it points to a {\tt Ref} with pointer $p$ and $p$ traces to a value $v$, $v$ is the result of the trace at $b$.
+An invalid path $b$ is interrupted at some point by a {\tt Ref}.
+Call the pointer at that {\tt Ref} $p$, and the remaining portion of $b$ $r$.
+If $p \app r$ traces to a value $v$, $v$ is the result of the trace of $b$.
+
+\begin{figure}
 \begin{alltt}
 data Share a = Branch a (Share a) (Share a)
              | Ref [Bool]
-\end{alltt}
 
-The type \share has a constructor {\tt Ref} that contains an integer.
-This integer represents the location in the stream thet the stream at the {\tt Ref} shares with.
+
+context g (Branch v _ _) [] = v
+context g (Branch _ o _) (True:r) = context g o r
+context g (Branch _ _ e) (False:r) = context g e r
+context g (Ref p) r = context g g (p++r)
+
+trace g b = context g g b
+\end{alltt}
+\caption{A definition of Braun streams with explicit sharing in Haskell, along with a function {\tt trace} that potentially extracts a value from the {\tt Share} for a location given as a {\tt [Bool]}.}
+\label{shareDef}
+\label{traceDef}
+\end{figure}
+
+Tracing a location in a \share may not always produce a value.
+For example, in {\tt Ref []}, no locations trace to values.
+If every list of booleans traces to a value in a \share $s$, we say $s$ is {\em well-formed}.
+In that case, we denote the trace of $l$ in $s$ by $s@l$, similar to indexing in Braun streams.
+This is the same notation as indexing in Braun streams, which facilitates the following definition:
+
+\begin{definition}
+A Braun stream or well-formed \share $a$ is {\em equivalent} to a Braun stream or well-formed \share $b$ when $a@l = b@l$ for all $l$,.
+\end{definition}
+
+\begin{comment}
+The type \share has a constructor {\tt Ref} that contains an list of booleans.
+We call this list a {\em pointer}; a pointer represents a location.
+a pointer $p$ at location $l$ indicates that the it points to a location in the stream that is bisimilar to the location in the stream that the stream at the {\tt Ref} shares with.
 For instance, the stream {\tt smallEyes} in Fig.~\ref{braunShare} could be represented as a \share as {\tt Branch 'i' (Ref []) (Ref [])}.
 References are context dependent, so the locations that are {\tt Ref []} in 
-\\
 {\tt Branch 'j' (Ref []) (Branch 'i' (Ref []) (Ref []))}
-\\
 refer back to the Braun stream with 'j' at the head.
-
-
+If in a \share $s$ every list of booleans traces to a value, we say $s$ is {\em valid}.
 A \share is called {\em well-formed} if, for every {\tt Ref b} at location $l$, $\ord{b} < \ord{l}$.
+A valid \share can be transformed into a well-formed \share of equivalent size.
+First, ensure every {\tt Ref} points to a {\tt Branch}.
+This is possible since a {\tt Ref} at location $b$ traces (by the validity of $s$) to a {\tt Branch}.
+This does not increase the size of the tree at all, as it simple replaces the pointers at certain {\tt Ref}s
+Now if any {\tt Ref}s point to {\tt Branch}es with higher-numbered locations, 
+Let $s$ be a valid {\tt Share}, and let $b$ point to a {\tt Ref} in $s$ that 
 This ensures that finding the value at any location in a Braun stream represented by a well-formed \share terminates.
 Attempting to find a value in a well-formed \share at location $b$ obviously succeeds if $b$ is a valid path in the tree.
 If it is not, it must be interrupted by a leaf.
-Assume the leaf is at location $l$ and points to location $p$.
+Assume the leaf is at location $l$ and refers to location $p$.
 Then there is some finite list of booleans $r$ such that $l \app r = b$.
 This is the remainder of $b$ that was not followed because the search was interrupted by the leaf at $l$.
 Following the reference at $l$ would point us to the location $\ord{p \app r}$.
 Since $\ord{p} < \ord{l}$, $\ord{p \app r} < \ord{l \app r} = \ord{b}$.
-Thus, following a reference in a well-formed \share points to a smaller location, ensures that following references terminates.
+Thus, following a reference in a well-formed \share points to a smaller location, ensuring that following references terminates.
 We will call the process of following a reference ``{\em resolving} a reference''.
-
-A well-formed \share is equivalent to a Braun stream without sharing when, for all locations $b$, the value of the \share at location $b$ (after followign references) is equal to the value of the Braun stream at location $b$.
+In fact, any valid share is equivalent to a well-formed shares 
+\end{comment}
 
 \subsection{Minimum Size of Cyclic Braun Streams}
 
-For odd $m \in \mathbb{N}$, let $\beta_m$ denote the size of the subgroup of $\mathbb{Z}_m^*$ generated by $2$, and $1$ when $m$ is $1$.
+For odd $m \in \mathbb{N}$, let $\beta_m$ denote the size of the subgroup of $\mathbb{Z}_m^*$ generated by $2$.
 \begin{lemma}
 \label{cycleSize}
 A Braun stream with cycle length $2^r m$ where $m$ is odd can be represented with a \share of size $2^{r+1} m \beta_m + 2^{r+1} - 1$.
@@ -490,7 +481,7 @@ A Braun stream with cycle length $2^r m$ where $m$ is odd can be represented wit
 \end{lemma}
 \begin{proof}
 For a list {\tt x:xs} with length $n = 2^r m$, we must produce a \share bisimilar to {\tt bcycle x xs}:
-\\
+
 \begin{alltt}
 lcycle :: a -> [a] -> LStream a
 lcycle x xs = 
@@ -519,9 +510,9 @@ iterateSlow f x =
 \end{alltt}
 
 Though this definition is much more intuitive, it is also much less efficient, as {\tt f} is applied to the same values repeatedly.
-It shows that every location in the Braun stream $\iter f x$ is bisimilar to $\iter f^{2^i}\ (f^j x)$ for some values of $i$ and $j$.
+It shows that every location in the Braun stream $\iter f x$ is equivalent to $\iter f^{2^i}\ (f^j x)$ for some values of $i$ and $j$.
 
-Applying this to {\tt bcycle x xs}, we see that every location in this Braun stream is bisimilar to 
+Applying this to {\tt bcycle x xs}, we see that every location in this Braun stream is equivalent to 
 \\
 {\tt fmap lhead (iterate (ltail}$^{2^i}${\tt ) (ltail}$^j\ ${\tt (lcycle x xs)))} 
 \\
@@ -529,7 +520,7 @@ for some $i$ and $j$.
 We denote the stream at such a location $\langle 2^i,j \rangle$, which we call its {\em address}.
 The members of this pair are called the {\em increment} and {\em offset}, respectively.
 On any cyclic {\tt LStream} {\tt ys} with cycle length $n$, {\tt ltail}$^k\ ${\tt ys} is bisimilar to {\tt ltail}$^l\ ${\tt ys} whenever $k \equiv l \mod n$.
-Therefore, the streams $\langle i,j \rangle$ and $\langle k,l \rangle$ in the Braun stream {\tt bcycle x xs} are bisimilar if $i \equiv k \mod n$ and $j \equiv l \mod n$.
+Therefore, the streams $\langle i,j \rangle$ and $\langle k,l \rangle$ in the Braun stream {\tt bcycle x xs} are equivalent if $i \equiv k \mod n$ and $j \equiv l \mod n$.
 
 This implies that there are at most $n^2$ distinct substreams of {\tt bcycle x xs}.
 With appropriate sharing, then, a {\tt bcycle x xs} can be represented by a tree with at most $n^2$ internal nodes.
@@ -538,19 +529,20 @@ Since a tree with $q$ internal nodes has $q+1$ leaves, this will complete the le
 We proceed by induction on $r$. 
 
 If $r$ is $0$, the cycle length is odd.
-Since each distinct stream location is $\langle 2^i,j \rangle$ for some $i, j$, there are at most $\beta_m m$ stream locations.
+Since each address is $\langle 2^i,j \rangle$ for some $i, j$, by the definition of $\beta_m$, there are at most $\beta_m m$ distinct addresses $\mod m$.
+Since every internal node that is not distinct from all other internal nodes can be replaced by a leaf, there are at most $\beta_m m$ internal nodes.
 
 For the induction step, assume $r = s+1$ and any cycle of length $2^s m$ can be represented by a \share with $2^s m \beta_m + 2^s - 1$ internal nodes.
 By our definition of {\tt iterateSlow}, it is clear that the left subtree of {\tt bcycle x xs} is {\tt fmap lhead (iterate (ltail}$^2${\tt ) (ltail (lcycle x xs)))}.
 However, since {\tt ltail (lcycle x xs)} has even cycle length, {\tt (iterate (ltail}$^2${\tt ) (ltail (lcycle x xs)))} is cyclic with cycle length $n/2$;
 it is simply every second element of {\tt (x:xs)}, cycled.
-By our induction hypothesis, this Braun stream can be represented by a share with $2^s m \beta_m + 2^s - 1$ internal nodes.
+By the induction hypothesis, this Braun stream can be represented by a share with $2^s m \beta_m + 2^s - 1$ internal nodes.
 A similar argument applies to the right subtree of {\tt bcycle x xs}.
 Their number of internal nodes, including the internal node at the root of the {\tt Share}, is thus $1+2*(2^s m \beta_m + 2^s - 1) = 2^r m \beta_m + 2^r - 1$.
 \qed
 \end{proof}
 
-In fact, this is the best we can do.
+In fact, this is the best we can do:
 
 \begin{lemma}
 A Braun stream {\tt bcycle x xs} with $n$ distinct elements and cycle length $n = 2^r m$ where $m$ is odd cannot be represented with a well-formed \share of size less than $2^{r+1} m \beta_m + 2^{r+1} - 1$.
@@ -559,15 +551,15 @@ A Braun stream {\tt bcycle x xs} with $n$ distinct elements and cycle length $n 
 
 Again we proceed by induction on $r$.
 If $r$ is $0$, $n$ is odd.
-We first show that every pair $\langle i'=2^i,j \rangle$ is represented in the stream.
-Since $n$ is odd, $2^i \mod n$ takes on every value in $|\langle 2 \rangle|$ (the subgroup of $\mathbb{Z}_n^*$ generated by $2$) infinitely often.
+We first show that every address $\langle 2^i,j \rangle$ is present in the Braun stream.
+Since $n$ is odd, $2^i \mod n$ takes on every value in $\langle 2 \rangle$ (the subgroup of $\mathbb{Z}_n^*$ generated by $2$) infinitely often.
 In particular, $2^{i+\beta_n} \equiv 2^i \mod n$.
 Additionally, for $i > \log_2 n$, the offsets of the nodes at level $i$, when sorted, form a contiguous chain of natural numbers of length $2^i$.
 Thus, every value of $\mathbb{Z}_n$ is congruent to the offset of some node at level $i$.
 
-Every pair in $\langle 2 \rangle \times \mathbb{Z}_n$ is the address of some location in the stream.
-Every pair of locations with distinct addresses resolve to two streams that are not bisimilar, since the cycle has $n$ distinct values.
-Additionally, since the \share is well-formed, such a pair of locations can be resolved to two distinct internal nodes.
+Therefore every address $\langle 2^i,j \rangle \in \langle 2 \rangle \times \mathbb{Z}_n$ corresponds to some location in the stream.
+No pair of locations with distinct addresses is equivalent, since the cycle has $n$ distinct values.
+%Additionally, since the \share is well-formed, such a pair of locations can be resolved to two distinct internal nodes.
 This shows that the \share must have at least $|\langle 2 \rangle \times \mathbb{Z}_n| = \beta_m m$ internal nodes.
 With the additional $\beta_m m + 1$ leaves, the entire tree is at least size $2 \beta_m m + 1$.
 
@@ -675,237 +667,6 @@ All of the output of {\tt action} in the subtree at $i$ is discarded, but the ad
 If the input list is finite, {\tt action} and {\tt trunc} ensure that no two locations with the same address are both represented as internal nodes.
 If the input list is not finite, {\tt action} never excapes the {\tt Right} branch, and {\tt trunc} produces an infinite {\tt Share}.
 
-\begin{comment}
-In the code above, the central detail is the function {\tt action}.
-This function decom
-Formally, Haskell datatypes are closer to coinductive types than inductive types, as the latter as forced to be 
-To formalize and clarify the sharing, a cyclic Braun stream will be built with explicit sharing.
-To ensure that the sharing is done correctly, we use {\tt iterate}.
-The functino we pass to iterate must:
-\begin{itemize}
-\item Be aware of the cycle length $m$
-\item Collect a list of pairs $\langle i,j \rangle$ representing the locations in $\mathbb{Z}_m \times \mathbb{Z}_m$ that already have locations in the stream associated with them
-\item Calculate a new pair based only on stream location
-\end{itemize}
-An appropriate such function is in Figure 
-It produces (and consumes) a triple consisting of the real location in the stream (0-indexed), the cycle length, and a partial function mapping pairs $\langle i,j \rangle$ to stream locations.
-From these triples, the function {\tt truncateFinite} 
-\begin{figure}
-\begin{alltt}
-data Share a = Branch a (Share a) (Share a)
-             | Ref Integer
-type Triple = (Integer,Integer,(Integer,Integer) -> Maybe Integer)
-finiteCycleAction :: Triple -> Triple
-finiteCycleAction (location,m,previous) =
-  (location+1,m,
-   let incrHere = incrementOf location m
-       offsetHere = location `mod` m
-   in case previous (incrHere, offsetHere) of
-        Just _ -> previous
-        Nothing -> 
-          let current (incr, offs) =
-                case (incr==incrHere, offs==offsetHere) of
-                  (Eq,Eq) -> Just location
-                  _ -> previous (incr, offs)
-          in current)
-floorlg2 :: Integer -> Integer
-floorlg2 x = 
-  case x `div` 2 of
-    0 -> 0
-    y -> 1 + floorlg2 y
-incrementOf :: Integer -> Integer -> Integer
-incrementOf location m =
-  (2^(floorlg2 (1+location))) `mod` m
-truncateFinite :: BS Triple -> BraunRef Integer
-truncateFinite (BS (loc,m,prev) od ev) =
-  let incrHere = incrementOf loc m
-       offsetHere = loc `mod` m
-  in case prev (incrHere, offsetHere) of
-       Just ref -> Ref ref
-       Nothing -> BS offsetHere 
-                     (truncateFinite od)
-                     (truncateFinite ev)
-            match f (mymod real mod,increm real mod) with
-              | None => Conr 
-                        (mat whole real)
-                        (truncate whole od)
-                        (truncate whole ev)
-              | Some bak => Ref _ bak
-            end
-          |inr (hed, _, _) =>
-            Conr hed
-            (truncate whole od)
-            (truncate whole ev)
-        end
-    end.
-floorlg2 (x:nat) \{measure id x\} :nat :=
-  match div2 x with
-    | 0 => 0
-    | y => S (floorlg2 y)
-  end.
-Definition increm real mod := 
-  mymod (pow 2 (floorlg2 (S real))) mod.
-CoInductive BraunRef (A:Set) : Set :=
-| Conr : A -> BraunRef A -> BraunRef A -> BraunRef A
-| Ref : nat -> BraunRef A.
-Definition action 
-  (A:Set) 
-  (x:nat*nat*(nat*nat->option nat))
-  : nat*nat*(nat*nat->option nat) :=
-  match x with
-    | inl (real,mod,f) => 
-      inl _ 
-      (S real,
-       mod,
-       match f (mymod real mod,increm real mod) with
-         | Some v => f
-         | None => fun pi =>
-           match pi with
-             | (p,i) => 
-               match (nat_compare p (mymod real mod),
-                 nat_compare i (increm real mod)) with
-                 | (Eq,Eq) => Some real
-                 | _ =>  f pi
-               end
-           end
-       end)
-    | inr (v,rem,sofar) =>
-      match rem with
-        | Nil => inl _ (S sofar,S sofar,memo (S sofar))
-        | Cons hed tl => inr _ (hed,tl,S sofar)
-      end
-  end.
-CoFixpoint truncate (A:Set) (whole:A * CoList A)
-  (x:Braun ((nat*nat*(nat*nat->option nat))+(A * CoList A * nat)))
-    : BraunRef A :=
-    match x with
-      | Conb v od ev =>
-        match v with 
-          | inl (real,mod,f) =>
-            match f (mymod real mod,increm real mod) with
-              | None => Conr 
-                        (mat whole real)
-                        (truncate whole od)
-                        (truncate whole ev)
-              | Some bak => Ref _ bak
-            end
-          |inr (hed, _, _) =>
-            Conr hed
-            (truncate whole od)
-            (truncate whole ev)
-        end
-    end.
-\end{alltt}
-\caption{}
-\label{braunRef}
-\end{figure}
-Assume {\tt xs} is finite and of length $m$.
-Then {\tt (ltail}$^j\ ${\tt (lcycle x xs))} is {\tt lcycle y ys} where 
-{\tt y:ys == let k = j `mod` (m+1) in drop k (x:xs) ++ take k (x:xs)}.
-Thus, {\tt (ltail}$^j\ ${\tt (lcycle x xs))} is bisimilar to {\tt (ltail}$^l\ ${\tt (lcycle x xs))} whenever $j \equiv l \mod (m+1)$.
-Similarly, if {\tt ys} is a cyclic {\tt LStream} with cycle length $m+1$, {\tt (iterate (ltail}$^{2^i}${\tt ) ys}
-We want fromLStream (lcycle x xs)
-\begin{alltt}
-CoFixpoint iterateSlow (A:Set) F (x:A) : Braun A :=
-  let g := fun z => F (F z) in
-    let y := F x in
-      Conb x (iterateSlow g y)
-             (iterateSlow g (F y)).
-cycle x xs 
-\end{alltt}
-\begin{alltt}
-Function floorlg2 (x:nat) \{measure id x\} :nat :=
-  match div2 x with
-    | 0 => 0
-    | y => S (floorlg2 y)
-  end.
-Definition increm real mod := 
-  mymod (pow 2 (floorlg2 (S real))) mod.
-Function mymod (n:nat) (m:nat) \{measure id n\} : nat :=
-  match m with
-    | 0 => 0
-    | _ =>
-      match nat_compare n m with
-        | Lt => n
-        | Eq => 0
-        | Gt => mymod (n-m) m
-      end
-  end.
-Definition action 
-  (A:Set) 
-  (x:(nat*nat*(nat*nat->option nat))
-    +(A * CoList A * nat))
-  : (nat*nat*(nat*nat->option nat))
-    +(A * CoList A * nat) :=
-  match x with
-    | inl (real,mod,f) => 
-      inl _ 
-      (S real,
-       mod,
-       match f (mymod real mod,increm real mod) with
-         | Some v => f
-         | None => fun pi =>
-           match pi with
-             | (p,i) => 
-               match (nat_compare p (mymod real mod),
-                 nat_compare i (increm real mod)) with
-                 | (Eq,Eq) => Some real
-                 | _ =>  f pi
-               end
-           end
-       end)
-    | inr (v,rem,sofar) =>
-      match rem with
-        | Nil => inl _ (S sofar,S sofar,memo (S sofar))
-        | Cons hed tl => inr _ (hed,tl,S sofar)
-      end
-  end.
-CoInductive CoList (A:Set) : Set :=
-| Nil : CoList A
-| Cons : A -> CoList A -> CoList A.
-CoInductive Braun (A:Set) : Set :=
-| Conb : A -> Braun A -> Braun A -> Braun A.
-Fixpoint mat' (A:Set) (whole:A * CoList A) (rem:CoList A) n :=
-  match n with
-    | 0 => 
-      match rem with
-        | Nil => let (ans,_) := whole in ans
-        | Cons ans _ => ans
-      end
-    | S m =>
-      match rem with
-        | Nil => mat' whole (let (_,rest) := whole in rest) m
-        | Cons _ rest => mat' whole rest m
-      end
-  end.
-Definition mat (A:Set) (whole:A * CoList A) (n:nat) : A :=
-  mat' whole (let (hed,tyl) := whole in Cons hed tyl) n.
-CoFixpoint truncate (A:Set) (whole:A * CoList A)
-  (x:Braun ((nat*nat*(nat*nat->option nat))+(A * CoList A * nat)))
-    : BraunRef A :=
-    match x with
-      | Conb v od ev =>
-        match v with 
-          | inl (real,mod,f) =>
-            match f (mymod real mod,increm real mod) with
-              | None => Conr 
-                        (mat whole real)
-                        (truncate whole od)
-                        (truncate whole ev)
-              | Some bak => Ref _ bak
-            end
-          |inr (hed, _, _) =>
-            Conr hed
-            (truncate whole od)
-            (truncate whole ev)
-        end
-    end.
-Definition cycle A hed tyl :=
-       truncate (hed,tyl) 
-         (iterate (@action A) (inr _ (hed,tyl,0))).
-\end{alltt}
-\end{comment}
-
 \section{Formalization in Coq}
 
 Some of the details of the algorithms presented above have been formalized in the Coq proof assistant \cite{coq,website}.
@@ -946,6 +707,8 @@ Formalizing in a language with extraction
 Formalizing time and space complexity
 
 complete formalization
+
+average case space complexity of cycle
 
 \bibliographystyle{splncs}
 \bibliography{braun}
