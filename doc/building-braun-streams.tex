@@ -558,7 +558,7 @@ We denote the stream at such a location $\langle 2^i,j \rangle$, which we call i
 The members of this pair are called the {\em increment} and {\em offset}, respectively.
 On any cyclic {\tt LStream} {\tt ys} with cycle length $n$, {\tt ltail}$^k\ ${\tt ys} is bisimilar to {\tt ltail}$^l\ ${\tt ys} whenever $k \equiv l \mod n$.
 Therefore, the streams $\langle i,j \rangle$ and $\langle k,l \rangle$ in the Braun stream {\tt bcycle x xs} are equivalent if $i \equiv k \mod n$ and $j \equiv l \mod n$.
-(Henceforth, addresses, increments, and offsets will only be indentified up to equivalence modulo $n$.)
+(Henceforth, addresses, increments, and offsets will only be identified up to equivalence modulo $n$.)
 
 
 This implies that there are at most $n^2$ distinct substreams of {\tt bcycle x xs}.
@@ -668,11 +668,11 @@ checkBack whole (Left (real,len,f)) =
       Nothing -> Left (whole `genericIndex` (mod real len)) 
 checkBack _ (Right (hed,_,_)) = Left hed
 
-kill :: BS (Either a [Bool]) -> BraunRef a
+kill :: BS (Either a [Bool]) -> Share a
 kill (BS (Left h) o e) = Branch h (kill o) (kill e)
 kill (BS (Right v) _ _) = Ref v
     
-trunc :: [a] -> BS (Trak a) -> BraunRef a
+trunc :: [a] -> BS (Trak a) -> Share a
 trunc w x = kill (fmap (checkBack w) x)
 
 smallCycle hed tyl =
