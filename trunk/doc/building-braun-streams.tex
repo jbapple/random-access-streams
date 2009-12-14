@@ -147,7 +147,7 @@ The stream {\tt smallEyes} only takes up $O(1)$ space.
 
 Figure~\ref{braunCons} illustrates that Braun streams are better suited for these cases.
 First, {\tt cons} is safe.
-The result of an application of {\tt cons} is guarenteed to have {\tt BS} as its top-level constructor.
+The result of an application of {\tt cons} is guaranteed to have {\tt BS} as its top-level constructor.
 The irrefutable pattern matching in the definition of {\tt cons}, denoted by ``$\sim$'', ensures that the top-level constructor is pattern matched lazily.
 The definition of {\tt cons} given is thus equivalent to:
 
@@ -698,11 +698,11 @@ Since no two locations $i,j <\ ${\tt sofar} have the same offset, none should be
 
 Applying iterate to {\tt action} and the input list produces a Braun stream with the output of {\tt action} as its values.
 The function {\tt trunc} maps those values to {\tt Share}s.
-A {\tt Ref} is produced at location $i$ (with addresss $a$) if and only if {\tt action}$^i$ has consumed the entirety of the list input and the partial map at location $i$ maps $a$ to a location $j < i$.
+A {\tt Ref} is produced at location $i$ (with address $a$) if and only if {\tt action}$^i$ has consumed the entirety of the list input and the partial map at location $i$ maps $a$ to a location $j < i$.
 When this occurs, all of the output of {\tt action} in the subtree at $i$ is discarded, but locations with identical addresses will be found by {\tt trace} in the subtree at location $j$.
 
 If the input list is finite, {\tt action} and {\tt trunc} ensure that no two locations with the same address are both represented as internal nodes.
-If the input list is not finite, {\tt action} never excapes the {\tt Right} branch, and {\tt trunc} produces an infinite {\tt Share}.
+If the input list is not finite, {\tt action} never escapes the {\tt Right} branch, and {\tt trunc} produces an infinite {\tt Share}.
 
 \begin{comment}
 Assume the leaf is at location $l$ and refers to location $p$.
@@ -725,11 +725,11 @@ For the algorithms in this paper, direct embedding was only partially possible.
 For instance, Coq requires functions producing values of coinductive types to be {\em productive}.
 This condition as enforced in Coq is similar to the requirement that functions consuming values of inductive types be structurally recursive.
 The iterate algorithm presented in Sect.~\ref{iterSect} is productive because of the way the two subtrees are interrelated, and is not productive in the eyes of Coq.
-Instead of proving this function productive directly, it was rewritten as an inductive function, then proved terminating using some of Coq's more sophistacted methods for writing recursive functions, like well-founded induction.
+Instead of proving this function productive directly, it was rewritten as an inductive function, then proved terminating using some of Coq's more sophisticated methods for writing recursive functions, like well-founded induction.
 The correctness of iterate is proved separately from this definition, in a module that simply assumes a definition matching the Haskell one given in Fig.~\ref{iterateCode}.
 
 In some cases, direct embedding in Coq was both possible and even more usable that the Haskell code so embedded.
-As noted in Subsect.~\ref{cycleAlgo}, Haskell lists may actually be streams.
+As noted in Sect.~\ref{cycleAlgo}, Haskell lists may actually be streams.
 Though this is sometimes a desired characteristic, as in the input to cycle, in some cases it does not reflect the actual desired meaning of the program.
 For instance, Braun streams are only indexed by finite lists of boolean values.
 Coq distinguishes between data structures that can be infinite (coinductive types) and those that must be finite (inductive types).
@@ -777,5 +777,9 @@ average case space complexity of cycle
 
 \end{document}
 
-% LocalWords:  Braun deque Coq subtree subtrees bijection superlinear
-% LocalWords:  oddFromEven
+% LocalWords:  Braun deque Coq subtree subtrees bijection superlinear safeBees
+% LocalWords:  oddFromEven dangerousBees datatype smallEyes booleans Bool fmap
+% LocalWords:  slowFromLStream LStream Okasaki makeArray Functor fromLStream
+% LocalWords:  lhead ltail indexable deques bisimilar bcycle lcycle iterateSlow
+% LocalWords:  substreams Artin floorlg2 increm genericIndex smallCycle trunc
+% LocalWords:  coinductive corecursive boolean
