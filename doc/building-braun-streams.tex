@@ -48,11 +48,11 @@
 
 Braun trees are a functional data structure with logarithmic-time indexing, update, and deque operations \cite{hoogerwoord}.
 They are mostly superseded by finger trees, which decrease to a constant the time required for deque operations \cite{kaplan96purely,HinzePat}.
-The restrictive structural constraints that give Braun trees slower deque operations than finger trees make them well-suited for operations on infinite lists, or {\em streams}.
+The restrictive structural constraints that give Braun trees slower deque operations make them well-suited for operations on infinite lists, or {\em streams}.
 
 This paper presents two new algorithms for building Braun streams from lazy lists.
 The first algorithm builds a Braun stream from a linear stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite lists \cite{okasakiBraun}.
-The second algorithm builds a cyclic Braun stream from a possibly finite list. 
+The second algorithm builds a cyclic Braun stream from a possibly infinite list. 
 When applied to finite lists of length $n$, this algorithm generates Braun streams that use $O(n^2)$ space, even when forced to arbitrary depth.
 In contrast, circular streams represented with finger trees must use $\Omega(i)$ space when forced to depth $i$.
 
@@ -228,8 +228,8 @@ slowFromLStream (Cons x xs) = cons x (slowFromLStream xs)
 
 As Okasaki notes, this algorithm takes $O(n \log n)$ time \cite{okasakiBraun}.
 For streams, the details of what this means are complicated by the fact that there is no finite $n$ that is the size of the list.
-A more specific way to state the bound is that, given a linear stream forced to depth $i$ and a Braun stream constructed from it using {\tt slowFromLStream}, forcing the first $i$ nodes of the Braun stream will take $O(i \log i)$ time.
-This is because, as can be seen in Fig.~\ref{braunCons}, {\tt cons} calls itself recursively on one of the two subtrees.
+Given a linear stream forced to depth $i$ and a Braun stream constructed from it using {\tt slowFromLStream}, forcing the first $i$ nodes of the Braun stream will take $O(i \log i)$ time.
+This is because {\tt cons} calls itself recursively on one of the two subtrees, as can be seen in Fig.~\ref{braunCons}.
 
 Okasaki presents a function {\tt makeArray} that builds a Braun tree from a linear list in $O(n)$ time, where $n$ is the length of the list \cite{okasakiBraun}.
 Unfortunately, this algorithm builds the tree from the leaves up, which is unsuitable for building streams.
@@ -428,7 +428,7 @@ With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\
 \qed
 \end{proof}
 
-\section{Cycling Possibly Finite Lists}
+\section{Cycling Possibly Infinite Lists}
 \label{cycleSect}
 
 As shown in Sect.~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ takes $\Omega(i)$ space in indexable deques.
@@ -558,8 +558,8 @@ On any cyclic {\tt LStream} {\tt ys} with cycle length $n$, {\tt ltail}$^k\ ${\t
 Therefore, the streams $\langle i,j \rangle$ and $\langle k,l \rangle$ in the Braun stream {\tt bcycle x xs} are equivalent if $i \equiv k \mod n$ and $j \equiv l \mod n$.
 
 This implies that there are at most $n^2$ distinct substreams of {\tt bcycle x xs}.
-With appropriate sharing, then, a {\tt bcycle x xs} can be represented by a tree with at most $n^2$ internal nodes.
-Out goal will be to show that it can be represented by a tree with $2^r m \beta_m + 2^r - 1$ internal nodes.
+With appropriate sharing, then, a {\tt bcycle x xs} can be represented by a {\tt Share} with at most $n^2$ internal nodes.
+Our goal will be to show that it can be represented by a {\tt Share} with $2^r m \beta_m + 2^r - 1$ internal nodes.
 Since a tree with $q$ internal nodes has $q+1$ leaves, this will complete the lemma.
 We proceed by induction on $r$. 
 
@@ -615,9 +615,9 @@ With the leaves, this makes the tree at least size $2^{r+1} m \beta_m + 2^{r+1} 
 \qed
 \end{proof}
 
-When $m$ is $1$, $n$ is a power of $2$, and the cyclic Braun stream can be as small as $4n-1$.
-When $\beta_n = n-1$, this tree can be as large as $2n(n-1)+1$.
-A 90-year-old conjecture of Artin proposes that this occurs infinitely often \cite{artin}.
+At a minimum, when $m$ is $1$, $n$ is a power of $2$, and the cyclic Braun stream can be represented by a {\tt Share} of size $4n-1$.
+Ata maximum, When $n$ is prime, $\beta_n$ can be as large as $n-1$, and the minimal {\tt Share} is of size $2n(n-1)+1$.
+A 90-year-old conjecture of Artin proposes that this maximum occurs infinitely often \cite{artin}.
 
 \subsection{Algorithm for Producing Minimal Cyclic Braun Streams}
 \label{cycleAlgo}
@@ -692,20 +692,20 @@ Otherwise, the map is updated so that $a$ is associated with {\tt real}.
 To track the address as a function of the location, {\tt action} also acts on the location {\tt real} and the cycle length {\tt len}, which are converted to the address increment and offset by {\tt increm} and {\tt mod}.
 These details are in the {\tt Left} branch of {\tt action}.
 
-One additional detail we must deal with is that the algorithm must correctly deal with infinite input.
-Furthermore, there is no Haskell function that can determine if a list is infinite.
-The function {\tt action} therefore also acts on the input list itself, taking the tail at each iteration.
+An additional detail that must be addressed is that the algorithm must correctly handle infinite input.
+Since there is no Haskell function that can determine if a list is infinite, the function {\tt action} also acts on the input list itself, taking the tail at each iteration.
 The details are in the {\tt Right} branch of {\tt action}.
 If the input is exhausted at location $sofar$, it has length $sofar+1$.
 Once the input list is exhausted, {\tt action} initializes the partial map from addresses to locations.
 Since no two locations $i,j <\ ${\tt sofar} have the same offset, none should be represented as a {\tt Ref}.
 
 Applying iterate to {\tt action} and the input list produces a Braun stream with the output of {\tt action} as its values.
-The function {\tt trunc} maps those values to {\tt Share}s.
-A {\tt Ref} is produced at location $i$ (with address $a$) if and only if {\tt action}$^i$ has consumed the entirety of the list input and the partial map at location $i$ maps $a$ to a location $j < i$.
-When this occurs, all of the output of {\tt action} in the subtree at $i$ is discarded, but locations with identical addresses will be found by {\tt trace} in the subtree at location $j$.
+The function {\tt checkBack} maps those values to {\tt Share}s.
+A {\tt Ref} is produced at location $i$ (with address $a$) if and only if {\tt action}$^i$ has consumed the entirety of the list input and the partial map at location $i$ maps $a$ to a location $j$. % < i$.
+After {\tt checkBack}, {\tt trunc} applies {\tt kill}.
+The function {\tt kill} discards all of the output of {\tt action} in the subtree at $i$, but locations with identical addresses will be found by {\tt trace} in the subtree at location $j$.
 
-If the input list is finite, {\tt action} and {\tt trunc} ensure that no two locations with the same address are both represented as internal nodes.
+If the input list is finite, {\tt action} and {\tt checkBack} ensure that no two locations with the same address are both represented as internal nodes.
 If the input list is not finite, {\tt action} never escapes the {\tt Right} branch, and {\tt trunc} produces an infinite {\tt Share}.
 
 The \share {\tt smallCycle x xs} must \ldots
@@ -717,7 +717,7 @@ Then there is some finite list of booleans $r$ such that $l \app r = b$.
 This is the remainder of $b$ that was not followed because the search was interrupted by the leaf at $l$.
 Following the reference at $l$ points to the location $\ord{p \app r}$.
 Since $\ord{p} < \ord{l}$, $\ord{p \app r} < \ord{l \app r} = \ord{b}$.
-Since following a reference leads smaller location, following references must eventually terminate.
+Since following a reference leads to a smaller location, following references must eventually terminate.
 
 \paragraph{\ldots be equivalent to {\tt bcycle x xs}.}
 A value produced by {\tt iterate action} is either:
@@ -755,7 +755,7 @@ The iterate algorithm presented in Sect.~\ref{iterSect} is productive because of
 Instead of proving this function productive directly, it was rewritten as an inductive function, then proved terminating using some of Coq's more sophisticated methods for writing recursive functions, like well-founded induction.
 The correctness of iterate is proved separately from this definition, in a module that simply assumes a definition matching the Haskell one given in Fig.~\ref{iterateCode}.
 
-In some cases, direct embedding in Coq was both possible and even more usable that the Haskell code so embedded.
+In some cases, direct embedding in Coq was both possible and even more usable than the Haskell code so embedded.
 As noted in Sect.~\ref{cycleAlgo}, Haskell lists may actually be streams.
 Though this is sometimes a desired characteristic, as in the input to cycle, in some cases it does not reflect the actual desired meaning of the program.
 For instance, Braun streams are only indexed by finite lists of boolean values.
