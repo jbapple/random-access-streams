@@ -46,26 +46,29 @@
 
 \section*{Abstract}
 
-Braun trees are a functional data structure with logarithmic-time indexing, update, and deque operations.\cite{hoogerwoord}
-They are mostly superseded by finger trees, which decrease to a constant the time required for deque operations.\cite{kaplan96purely,HinzePat}
+Braun trees are a functional data structure with logarithmic-time indexing, update, and deque operations \cite{hoogerwoord}.
+They are mostly superseded by finger trees, which decrease to a constant the time required for deque operations \cite{kaplan96purely,HinzePat}.
 The restrictive structural constraints that give Braun trees slower deque operations than finger trees make them well-suited for operations on infinite lists, or {\em streams}.
 
 This paper presents two new algorithms for building Braun streams from lazy lists.
-The first algorithm builds a Braun stream from a linear stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite lists.\cite{okasakiBraun} 
+The first algorithm builds a Braun stream from a linear stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite lists \cite{okasakiBraun},
 The second algorithm builds a cyclic Braun stream from a possibly finite list. 
 When applied to finite lists of length $n$, this algorithm generates Braun streams that use $O(n^2)$ space, even when forced to arbitrary depth.
 In contrast, circular streams represented with finger trees must use $\Omega(i)$ space when forced to depth $i$.
 
-Correctness proofs of the two algorithms are presented along with formal verifications using the Coq proof assistant.
+Correctness proofs of the two algorithms are presented along with discussion of formal verifications using the Coq proof assistant.
 
 \section{Introduction}
 \label{logspaceCycle}
 
-Braun trees are a tightly-constrained functional data structure offering array and deque operations in logarithmic time.\cite{hoogerwoord,okasakiBraun} 
-Modern data structures with looser constraints support constant-time deque operations, and perform better than Braun trees in practice.\cite{HinzePat,okasakiSkewLists}
+Braun trees are a tightly-constrained functional data structure offering array and deque operations in logarithmic time \cite{hoogerwoord,okasakiBraun}.
+Modern data structures with looser constraints support constant-time deque operations, and perform better than Braun trees in practice \cite{HinzePat,okasakiSkewLists}.
 These more permissive structures, however, make some operations unsafe when building infinite lists, or {\em streams}.
 
-For example, a user constructing an infinite list in Haskell can write {\tt let bees = 'b' : bees} to construct a stream.
+For example, a user constructing an infinite list in 
+Haskell\footnote{The lazy, purely-functional language Haskell \cite{haskellReport} is used for program listings throughout this report.
+The Braun stream algorithms have been implemented by the author in Haskell and are available in an open source library \cite{website}. } 
+can write {\tt let bees = 'b' : bees} to construct a stream.
 Because the cons operation on native Haskell lists does need to inspect its second argument, {\tt bees} is constructed without trouble.
 An example of how this fails in a typical modern random-access list is shown in Fig.~\ref{23consFail}.
 
@@ -168,26 +171,33 @@ Like 2-3 finger trees, other stream candidates offering $O(1)$ deque operations 
 
 %What does linear time mean on infinite streams?
 
-\section{Braun Streams}
-\label{braunDef}
+The remainder of this paper is organized as follows: 
+Section~\ref{braunSect} describes Braun streams and the basic operations.
+Section~\ref{iterSect} describes the algorithm {\tt iterate}, which is used to build Braun streams from linear streams.
+Section~\ref{cycleSect} describes the algorithm {\tt cycle}, which uses {\tt iterate} to build a cyclic Braun stream from a possibly infinite list.
+Section~\ref{coqSect} discusses the partial formalization in the Coq proof assistant of the algorithms in Sections~\ref{iterSect}~and~\ref{cycleSect}.
+Section~\ref{conclSect} concludes.
 
-Braun streams are simply infinite full binary trees.
+\section{Braun Streams}
+\label{braunSect}
+
+Braun streams are infinite full binary trees.
 The $0$th element is stored in the root of the tree, while odd-indexed elements appear in the left subtree and even-indexed elements appear in the right.
 The subtrees of a Braun tree are also Braun trees, after reindexing by order.
-That is, the 0th entry of any subtree is at its root, and its 1st, 3rd, 5th, ... elements are in its left subtree, etc.
+%That is, the 0th entry of any subtree is at its root, and its 1st, 3rd, 5th, ... elements are in its left subtree, etc.
 
 To make this recursive relation clear, we index Braun streams by finite lists of booleans.
 The root element is indexed by the empty list.
 The odd-indexed elements are indexed by lists that start with \verb|True|, the even-indexed elements by lists that start with \verb|False|.
-There is an obvious bijection between finite lists of booleans and integers;
+There is an simple bijection between finite lists of booleans and natural numbers;
 it is expressed in \verb|ord| and \verb|list| in Fig.~\ref{basicCode}.
 
 \begin{figure}
 \begin{alltt}
-bat :: BS a -> [Bool] -> a
-bat (BS h _ _) [] = h
-bat (BS _ o _) (True:r) = bat o r
-bat (BS _ _ e) (False:r) = bat e r
+at :: BS a -> [Bool] -> a
+at (BS h _ _) [] = h
+at (BS _ o _) (True:r) = at o r
+at (BS _ _ e) (False:r) = at e r
 
 ord :: [Bool] -> Integer
 ord [] = 0
@@ -201,7 +211,7 @@ list n =
       | 1 -> False:(list ((x-1)`div`2))
       | 0 -> True:(list ((x-2)`div`2))
 \end{alltt}
-\caption{Indexing into Braun streams and index conversions in Haskell.
+\caption{Indexing into Braun streams and index conversions.
 See Figure~\ref{braunDef} for the definition of the {\tt BS} datatype.}
 \label{basicCode}
 \end{figure}
@@ -209,7 +219,23 @@ See Figure~\ref{braunDef} for the definition of the {\tt BS} datatype.}
 \section{Building Braun Streams from Linear Streams}
 \label{iterSect}
 
-The algorithm for building a Braun stream from a linear stream (along with supporting code) is displayed in Fig.~\ref{iterateCode}.
+Building a Braun stream from a linear stream can be done successfully using the {\tt cons} operation from Fig.~\ref{braunCons}:
+
+\begin{alltt}
+slowFromLStream :: LStream a -> Stream a
+slowFromLStream (Cons x xs) = cons x (slowFromLStream xs)
+\end{alltt}
+
+As Okasaki notes, this algorithm takes $O(n \log n)$ time \cite{okasakiBraun}.
+For streams, the details of what this means are complicated by the fact that there is no finite $n$ that is the size of the list.
+A more specific way to state the bound is that, given a linear stream forced to depth $i$ and a Braun stream constructed from it using {\tt slowFromLStream}, forcing the first $i$ nodes of the Braun stream will take $O(i \log i)$ time.
+This is because, as can be seen in Fig.~\ref{braunCons}, {\tt cons} calls itself recursively on one of the two subtrees.
+
+Okasaki presents a function {\tt makeArray} that builds a Braun tree from a linear list in $O(n)$ time, where $n$ is the length of the list \cite{okasakiBraun}.
+Unfortunately, this algorithm builds the tree from the leaves up, which is unsuitable for building streams.
+Additionally, it does not produce a top-level constructor until the algorithm is complete, so the time complexity for {\tt at (makeArray l) []} is $O(n)$ when {\tt l} is of size $n$, rather than $O(1)$ as it would be with a root-first algorithm.
+This section presents an linear-time algorithm ($O(i)$ when forcing the first $i$ nodes of the result) that works for streams.
+The code for the algorithm is displayed in Fig.~\ref{iterateCode}.
 
 \begin{figure}
 \begin{alltt}
@@ -233,11 +259,19 @@ data LStream a = Cons \{lhead::a,
 fromLStream :: LStream a -> Stream a
 fromLStream s = fmap lhead (iterate ltail s)
 \end{alltt}
-\caption{The algorithm for building a Braun stream from a linear stream in Haskell}
+\caption{The algorithm for building a Braun stream from a linear stream.}
 \label{iterateCode}
 \end{figure}
 
-For the proofs, \verb|ord l| is written $\ord{l}$ and \verb|bat s l| is written $s@l$.
+The function {\tt oddFromEven} takes as input a function $f$, a value $x$, and a Braun stream $\{ f^{2i} (f^2 x): i \in \mathbb{N}\}$, and produces a Braun stream $\{ f^{2i} (f x): i \in \mathbb{N}\}$ (see Lemma~\ref{oddFromLemma}).
+The function {\tt iterate} produces the Braun stream $\{ f^i x: i \in \mathbb{N}\}$ by interleaving two mutually recursive Braun streams created using {\tt oddFromEven} (see Theorem~\ref{iterateCorrect}).
+Given the correctness of {\tt iterate}, the correctness of {\tt fromLStream} follows immediately.
+
+The time for {\tt fromLStream} is dominated by the call to {\tt iterate}.
+It can be seen that {\tt iterate}, {\tt oddFromEven}, and {\tt fmap} all produce one new element of the stream while calling $f$ only once.
+The function {\tt iterate} thus produces $i$ elements of the stream with only $i$ recursive calls and $i$ applications of $f$.
+
+In the proofs below, \verb|ord l| is written $\ord{l}$ and \verb|at s l| is written $s@l$.
 
 \begin{lemma}\label{oddFromLemma}
 For any $f, b, x, e, k$
@@ -352,7 +386,7 @@ then
 We proceed by well-founded induction on $\ord{b}$.
 If $b = \nil$, the equality is trivial.
 Otherwise, let $b = \cons{a}{d}$.
-There is a lemma that is needed whether $a$ is $\true$ or $\false$
+There is a lemma that is needed whether $a$ is $\true$ or $\false$:
 
 \begin{lemma}\label{iterateSublemma}
 \begin{displaymath}
@@ -395,6 +429,7 @@ With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\
 \end{proof}
 
 \section{Cycling Possibly Finite Lists}
+\label{cycleSect}
 
 As shown in Sect.~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ takes $\Omega(\log i)$ space in indexable deques.
 If constructed properly, a cyclic stream with cycle length $m$ can be represented as a Braun stream in $O(m^2)$ space.
@@ -427,7 +462,7 @@ context g (Ref p) r = context g g (p++r)
 
 trace g b = context g g b
 \end{alltt}
-\caption{A definition of Braun streams with explicit sharing in Haskell, along with a function {\tt trace} that potentially extracts a value from the {\tt Share} for a location given as a {\tt [Bool]}.}
+\caption{A definition of Braun streams with explicit sharing, along with a function {\tt trace} that potentially extracts a value from the {\tt Share} for a location given as a {\tt [Bool]}.}
 \label{shareDef}
 \label{traceDef}
 \end{figure}
@@ -557,15 +592,17 @@ In particular, $2^{i+\beta_n} \equiv 2^i \mod n$.
 Additionally, for $i > \log_2 n$, the offsets of the nodes at level $i$, when sorted, form a contiguous chain of natural numbers of length $2^i$.
 Thus, every value of $\mathbb{Z}_n$ is congruent to the offset of some node at level $i$.
 
-Therefore every address $\langle 2^i,j \rangle \in \langle 2 \rangle \times \mathbb{Z}_n$ corresponds to some location in the stream.
-No pair of locations with distinct addresses is equivalent, since the cycle has $n$ distinct values.
-%Additionally, since the \share is well-formed, such a pair of locations can be resolved to two distinct internal nodes.
-This shows that the \share must have at least $|\langle 2 \rangle \times \mathbb{Z}_n| = \beta_m m$ internal nodes.
-With the additional $\beta_m m + 1$ leaves, the entire tree is at least size $2 \beta_m m + 1$.
+Therefore every address $\langle 2^i,j \rangle \in \langle 2 \rangle \times \mathbb{Z}_n$ corresponds to some location in the Braun stream.
+Now consider two locations in the Braun stream: location $a$ with address $\langle i,j \rangle$ and location $b$ with address $\langle k,l \rangle$.
+If these locations are equivalent, $s@a = s@b$ and $s@(a \app [\true]) = s@(b \app [\true])$.
+These equations imply $(x:xs) !! (j\mod n) = (x:xs) !! (l\mod n)$ and $(x:xs) !! (j+i\mod n) = (x:xs) !! (l+k\mod n)$.
+These, in turn, imply that $j \equiv l \mod n$ and $i \equiv k \mod n$, which means that these locations have the same address.
+Since any two equivalent locations have the same address and there are $|\langle 2 \rangle \times \mathbb{Z}_n| = \beta_m m$ distinct addresses, a \share representing this Braun stream must have at least $|\langle 2 \rangle \times \mathbb{Z}_n| = \beta_m m$ internal nodes.
+With the additional $\beta_m m + 1$ leaves, the size of the entire \share is at least $2 \beta_m m + 1$.
 
 For the induction step, assume $r = s+1$ and no cycle with $2^s m$ distinct elements and cycle length $2^s m$ can be represented by a \share with fewer than $2^s m \beta_m + 2^s - 1$ internal nodes.
-As before, the left subtree and right subtrees of {\tt bcycle x xs} are {\tt fmap lhead (iterate (ltail}$^2${\tt ) (ltail}$^{\{1,2\}}\ ${\tt (lcycle x xs)))}, respectively.
-Again, since {\tt ltail (lcycle x xs)} has even cycle length, and the subtrees are cyclic with cycle length $n/2$.
+As before, the left subtree and right subtree of {\tt bcycle x xs} are {\tt fmap lhead (iterate (ltail}$^2${\tt ) (ltail}$^{\{1,2\}}\ ${\tt (lcycle x xs)))}, respectively.
+Again, since {\tt ltail (lcycle x xs)} has even cycle length, the subtrees are cyclic with cycle length $n/2$.
 The left tree is every second element of {\tt (x:xs)} (starting at the second element), cycled.
 The left tree is every second element of {\tt (x:xs)} (starting at the third element and with {\tt x} appended at the end), cycled.
 These lists are disjoint by assumption, so the left and right subtrees cannot have any inter-tree sharing.
@@ -579,7 +616,7 @@ With the leaves, this makes the tree at least size $2^{r+1} m \beta_m + 2^{r+1} 
 
 When $m$ is $1$, $n$ is a power of $2$, and the cyclic Braun stream can be as small as $4n-1$.
 When $\beta_n = n-1$, this tree can be as large as $2n(n-1)+1$.
-A unsolved 90-year-old conjecture of Artin proposes that this occurs infinitely often \cite{artin}.
+A 90-year-old conjecture of Artin proposes that this occurs infinitely often \cite{artin}.
 
 \subsection{Algorithm for Producing Minimal Cyclic Braun Streams}
 \label{cycleAlgo}
@@ -639,7 +676,7 @@ smallCycle hed tyl =
 \end{figure}
 
 In order to build a minimal well-formed {\tt Share}, we must ensure that no internal node shares an address with location with a smaller location;
-For any address $a$, only the first location with that address should be an internal node.
+for any address $a$, only the first location with that address should be an internal node.
 All other locations in the \share with the same address should be {\tt Ref}s.
 %(Of course, there will be an infinite number of locations in an equivalent Braun stream with the same address; in a finite share some of these 
 
@@ -654,20 +691,30 @@ These details are in the {\tt Left} branch of {\tt action}.
 One additional detail we must deal with is that the algorithm must correctly deal with infinite input.
 Furthermore, there is no Haskell function that can determine if a list is infinite.
 The function {\tt action} therefore also acts on the input list itself, taking the tail at each iteration.
-The details are in the {\tt Right} branch of {\tt action}
+The details are in the {\tt Right} branch of {\tt action}.
 If the input is exhausted at location $sofar$, it has length $sofar+1$.
 Once the input list is exhausted, {\tt action} initializes the partial map from addresses to locations.
 Since no two locations $i,j <\ ${\tt sofar} have the same offset, none should be represented as a {\tt Ref}.
 
-Applying iterate to {\tt action} and the input list produces a Braun stream with the output of action as its values.
+Applying iterate to {\tt action} and the input list produces a Braun stream with the output of {\tt action} as its values.
 The function {\tt trunc} maps those values to {\tt Share}s.
-A {\tt Ref} is produced at location $i$ (with addresss $a$) if and only if {\tt action}$^i$ has consumed the entirety of the list input and the partial map from addresses to locations already maps $a$ to a location $j < i$.
-All of the output of {\tt action} in the subtree at $i$ is discarded, but the addresses of all of these locations are already present in the subtree at location $j$.
+A {\tt Ref} is produced at location $i$ (with addresss $a$) if and only if {\tt action}$^i$ has consumed the entirety of the list input and the partial map at location $i$ maps $a$ to a location $j < i$.
+When this occurs, all of the output of {\tt action} in the subtree at $i$ is discarded, but locations with identical addresses will be found by {\tt trace} in the subtree at location $j$.
 
 If the input list is finite, {\tt action} and {\tt trunc} ensure that no two locations with the same address are both represented as internal nodes.
 If the input list is not finite, {\tt action} never excapes the {\tt Right} branch, and {\tt trunc} produces an infinite {\tt Share}.
 
+\begin{comment}
+Assume the leaf is at location $l$ and refers to location $p$.
+Then there is some finite list of booleans $r$ such that $l \app r = b$.
+This is the remainder of $b$ that was not followed because the search was interrupted by the leaf at $l$.
+Following the reference at $l$ would point us to the location $\ord{p \app r}$.
+Since $\ord{p} < \ord{l}$, $\ord{p \app r} < \ord{l \app r} = \ord{b}$.
+Thus, following a reference in a well-formed \share points to a smaller location, ensuring that following references terminates.
+\end{comment}
+
 \section{Formalization in Coq}
+\label{coqSect}
 
 Some of the details of the algorithms presented above have been formalized in the Coq proof assistant \cite{coq,website}.
 
@@ -697,7 +744,21 @@ hiccups:
 \end{comment}
 
 \section{Conclusion}
+\label{conclSect}
 
+We have presented two algorithms for efficiently building Braun streams.
+From {\tt iterate}, the first algorithm, we can build Braun streams from linear streams in linear time.
+Using {\tt cycle}, the second algorithm, we can build Braun streams in optimal space.
+
+Although Braun streams offer safe, efficient operations than other random-access lists do not support when used in as streams, Braun streams may be overtaken in the infinite setting as they were in the finite setting.
+Future work may reveal a functional stream datatype that can support logarithmic-time indexing and constant-time cons.
+
+Although the algorithms presented above have been partially formalized in a proof assistant, there is still room for improvement in the formalization.
+This includes formalization in a system that supports a more direct embedding of Haskell code and formalization of the time bounds of the algorithms.
+
+Finally, though the conjecture that would answer the question of how often {\tt cycle} requires the maximum space has stood open for decades, there may be a ready answer for the expected space {\tt cycle} requires.
+
+\begin{comment}
 Is there a data structure that provides terminating constant-time \verb|cons|?
 
 Also good for finite Braun trees, because can get index i in time $i$, not $n+i$
@@ -709,6 +770,7 @@ Formalizing time and space complexity
 complete formalization
 
 average case space complexity of cycle
+\end{comment}
 
 \bibliographystyle{splncs}
 \bibliography{braun}
