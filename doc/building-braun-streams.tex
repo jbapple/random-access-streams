@@ -580,6 +580,7 @@ Their number of internal nodes, including the internal node at the root of the {
 In fact, this is the best we can do:
 
 \begin{lemma}
+\label{cycleSizeMin}
 A Braun stream {\tt bcycle x xs} with $n$ distinct elements and cycle length $n = 2^r m$ where $m$ is odd cannot be represented with a well-formed \share of size less than $2^{r+1} m \beta_m + 2^{r+1} - 1$.
 \end{lemma}
 \begin{proof}
@@ -656,16 +657,19 @@ action (Left (real,len,f)) =
 action (Right (_,[],sofar)) = Left (1+sofar,1+sofar,memo (1+sofar))
 action (Right (_,hed:tyl,sofar)) = Right (hed,tyl,1+sofar)
 
-trunc :: [a] -> BS (Trak a) -> BraunRef a
-trunc whole (BS (Left (real,len,f)) od ev) =
+checkBack :: [a] -> Trak a -> Either a [Bool]
+checkBack whole (Left (real,len,f)) =
     case f (mod real len,increm real len) of
-      Just bak -> Ref (order bak)
-      Nothing -> Branch (whole `genericIndex` (mod real len)) 
-                        (trunc whole od) 
-                        (trunc whole ev)
-trunc whole (BS (Right (hed,c,n)) od ev) =
-    Branch hed (trunc whole od)
-               (trunc whole ev)
+      Just bak -> Right (order bak)
+      Nothing -> Left (whole `genericIndex` (mod real len)) 
+checkBack _ (Right (hed,_,_)) = Left hed
+
+kill :: BS (Either a [Bool]) -> BraunRef a
+kill (BS (Left h) o e) = Branch h (kill o) (kill e)
+kill (BS (Right v) _ _) = Ref v
+    
+trunc :: [a] -> BS (Trak a) -> BraunRef a
+trunc w x = kill (fmap (checkBack w) x)
 
 smallCycle hed tyl =
   trunc (hed:tyl)
@@ -675,7 +679,7 @@ smallCycle hed tyl =
 \label{cycleDetails}
 \end{figure}
 
-In order to build a minimal well-formed {\tt Share}, we must ensure that no internal node shares an address with location with a smaller location;
+In order to build a minimal well-formed {\tt Share}, we ensure that no internal node shares an address with a smaller location;
 for any address $a$, only the first location with that address should be an internal node.
 All other locations in the \share with the same address should be {\tt Ref}s.
 %(Of course, there will be an infinite number of locations in an equivalent Braun stream with the same address; in a finite share some of these 
@@ -704,19 +708,42 @@ When this occurs, all of the output of {\tt action} in the subtree at $i$ is dis
 If the input list is finite, {\tt action} and {\tt trunc} ensure that no two locations with the same address are both represented as internal nodes.
 If the input list is not finite, {\tt action} never escapes the {\tt Right} branch, and {\tt trunc} produces an infinite {\tt Share}.
 
-\begin{comment}
-Assume the leaf is at location $l$ and refers to location $p$.
+The \share {\tt smallCycle x xs} must \ldots
+
+\paragraph{\ldots be well-formed.}
+The function {\tt action} ensures that every {\tt Ref} points to an earlier location in the stream.
+Assume the {\tt Ref} is at location $l$ and refers to location $p$.
 Then there is some finite list of booleans $r$ such that $l \app r = b$.
 This is the remainder of $b$ that was not followed because the search was interrupted by the leaf at $l$.
-Following the reference at $l$ would point us to the location $\ord{p \app r}$.
+Following the reference at $l$ points to the location $\ord{p \app r}$.
 Since $\ord{p} < \ord{l}$, $\ord{p \app r} < \ord{l \app r} = \ord{b}$.
-Thus, following a reference in a well-formed \share points to a smaller location, ensuring that following references terminates.
-\end{comment}
+Since following a reference leads smaller location, following references must eventually terminate.
+
+\paragraph{\ldots be equivalent to {\tt bcycle x xs}.}
+A value produced by {\tt iterate action} is either:
+
+\begin{itemize}
+
+\item {\tt Right (hed,\_,n)} at location $n$, where {\tt hed} is the $n$th element of {\tt x:xs} 
+-- In this case, {\tt checkBack} and {\tt kill} produce a {\tt Branch} with the value {\tt hed}.
+
+\item {\tt Left (n,l,f)}, where $l$ is the length of {\tt x:xs}
+-- If the address at $n$ is already mapped by $f$, it is mapped to a location less than $n$.
+If it is not mapped, {\tt checkBack} and {\tt kill} produce a {\tt Branch} with value {\tt (x:xs) !! m}, where $m \equiv n \mod l$.
+
+\end{itemize}
+
+\paragraph{\ldots be of minimum size.}
+The function {\tt action}, when applied at a location with an address $a$ and map $f$ such that $a$ is unmapped, ensures $a$ is mapped in the result.
+%If $a$ is already mapped, its value in the map does not change.
+Duplicate addresses can therefore not appear in {\tt Branch}es after applying {\tt checkBack}, since {\tt checkBack} turns already-mapped addresses into {\tt Ref}s.
+Since no duplicate addresses appear, and since, by the analysis in Lemma~\ref{cycleSizeMin}, every address appearing in {\tt bcycle x xs} also appears in any equivalent {\tt Share}, {\tt smallCycle x xs} includes the minimum number of {\tt Branch}es.
 
 \section{Formalization in Coq}
 \label{coqSect}
 
 Some of the details of the algorithms presented above have been formalized in the Coq proof assistant \cite{coq,website}.
+Among these details is the entirety of the correctness proof of {\tt iterate} found in Sect.~\ref{iterSect}.
 
 One of the advantages of formalizing proofs of functional algorithms in Coq is that the data structures and algorithms can sometimes be directly embedded in Coq using its built-in syntax.
 Coq natively supports inductive and coinductive types as well as recursive  and corecursive functions.
@@ -734,6 +761,10 @@ Though this is sometimes a desired characteristic, as in the input to cycle, in 
 For instance, Braun streams are only indexed by finite lists of boolean values.
 Coq distinguishes between data structures that can be infinite (coinductive types) and those that must be finite (inductive types).
 This difference helps Coq accurately model both intended uses, unlike Haskell.
+
+%Finally, in some cases formalization tended to expose certain mathematical informalities that paper proofs tend to assume reader familiarity with.
+%For instance, the notion of repeated function application (and its notation ``$f^n$'') is something that is easily taken for granted.
+%Simple proofs of the usual arithmetic are a small task, but can, in bulk, add to the overhead of 
 
 \begin{comment}
 how many lines?
