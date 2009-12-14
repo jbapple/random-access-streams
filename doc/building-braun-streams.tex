@@ -757,28 +757,21 @@ hiccups:
 
 This paper presents two algorithms for efficiently building Braun streams.
 The first algorithm, {\tt iterate}, builds Braun streams from linear streams in linear time.
-The second algorithm, {\tt cycle}, builds Braun cyclic Braun streams from possibly infinite lists in optimal space.
+The second algorithm, {\tt cycle}, builds cyclic Braun streams from possibly infinite lists in optimal space.
 
-Although Braun streams offer safe, efficient operations than other random-access lists do not support when used in as streams, Braun streams may be overtaken in the infinite setting as they were in the finite setting.
-Future work may reveal a functional stream datatype that can support logarithmic-time indexing and constant-time cons.
+Although Braun streams offer safe, efficient operations that other random-access lists do not support, they may be superseded in the infinite setting as they were in the finite setting.
+There may be a functional stream datatype that can support logarithmic-time indexing and constant-time cons.
+There may also be a functional stream datatype that offers tunable performance in a trade-off between deque operations and indexing, as in \cite{hinzeArray}.
 
 Although the algorithms presented above have been partially formalized in a proof assistant, there is still room for improvement in the formalization.
 This includes formalization in a system that supports a more direct embedding of Haskell code and formalization of the time bounds of the algorithms.
 
-Finally, though the conjecture that would answer the question of how often {\tt cycle} requires the maximum space has stood open for decades, there may be a ready answer for the expected space {\tt cycle} requires.
+Finally, though the conjecture that would answer the question of how often {\tt cycle} requires the maximum space has stood open for decades, there may be a ready answer for the expected space required.
 
 \begin{comment}
-Is there a data structure that provides terminating constant-time \verb|cons|?
-
 Also good for finite Braun trees, because can get index i in time $i$, not $n+i$
 
-Formalizing in a language with extraction
-
-Formalizing time and space complexity
-
 complete formalization
-
-average case space complexity of cycle
 \end{comment}
 
 \bibliographystyle{splncs}
