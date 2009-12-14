@@ -51,7 +51,7 @@ They are mostly superseded by finger trees, which decrease to a constant the tim
 The restrictive structural constraints that give Braun trees slower deque operations than finger trees make them well-suited for operations on infinite lists, or {\em streams}.
 
 This paper presents two new algorithms for building Braun streams from lazy lists.
-The first algorithm builds a Braun stream from a linear stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite lists \cite{okasakiBraun},
+The first algorithm builds a Braun stream from a linear stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite lists \cite{okasakiBraun}.
 The second algorithm builds a cyclic Braun stream from a possibly finite list. 
 When applied to finite lists of length $n$, this algorithm generates Braun streams that use $O(n^2)$ space, even when forced to arbitrary depth.
 In contrast, circular streams represented with finger trees must use $\Omega(i)$ space when forced to depth $i$.
@@ -100,7 +100,7 @@ safeBees = stream 'b'
 \caption{
 A simplification of 2-3 finger trees for use as a stream \cite{HinzePat}. 
 Use of {\tt cons} as in {\tt dangerousBees} produces $\bot$, but a stream like {\tt safeBees} can be created while avoiding {\tt cons}.
-However, {\tt safeBees} uses $\Omega(\log i)$ space when forced to depth $i$.
+However, {\tt safeBees} uses $\Omega(i)$ space when forced to depth $i$.
 }
 \label{23consFail}
 \label{23stream}
@@ -116,7 +116,7 @@ Because of this, {\tt dangerousBees} is actually undefined.
 
 Though {\tt cons} is an unsafe operation, streams can still be built of 2-3 finger trees by avoiding {\tt cons}.
 Figure~\ref{23stream} also shows {\tt safeBees}, which does not evaluate to $\bot$, unlike {\tt dangerousBees}.
-On the other hand, it uses $\Omega(\log i)$ space when forced to depth $i$.
+On the other hand, it uses $\Omega(i)$ space when forced to depth $i$.
 
 \begin{figure}
 \begin{alltt}
@@ -431,7 +431,7 @@ With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\
 \section{Cycling Possibly Finite Lists}
 \label{cycleSect}
 
-As shown in Sect.~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ takes $\Omega(\log i)$ space in indexable deques.
+As shown in Sect.~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ takes $\Omega(i)$ space in indexable deques.
 If constructed properly, a cyclic stream with cycle length $m$ can be represented as a Braun stream in $O(m^2)$ space.
 This section describes an algorithm to produce a cyclic Braun stream of minimal size.
 
