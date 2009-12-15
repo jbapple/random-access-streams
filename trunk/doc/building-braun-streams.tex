@@ -635,7 +635,7 @@ action (Right (_,hed:tyl,sofar)) = Right (hed,tyl,1+sofar)
 checkBack :: [a] -> Trak a -> Either a [Bool]
 checkBack whole (Left (real,len,f)) =
     case f (mod real len,increm real len) of
-      Just bak -> Right (order bak)
+      Just bak -> Right (list bak)
       Nothing -> Left (whole `genericIndex` (mod real len)) 
 checkBack _ (Right (hed,_,_)) = Left hed
 
