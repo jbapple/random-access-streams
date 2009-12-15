@@ -3,125 +3,135 @@
 
 module Cycleextract where
 
+import qualified Debug.Trace as D
 import List(genericIndex)
-data Braun a = Conb a (Braun a) (Braun a)
+import qualified Data.Map as M
 
-data BraunRef a = Conr a (BraunRef a) (BraunRef a)
-                | Ref Integer deriving (Show)
+data BS a = BS a (BS a) (BS a)
+
+data BraunRef a = Branch a (BraunRef a) (BraunRef a)
+                | Ref [Bool] 
+                  deriving (Show)
 
 size (Ref _) = 1
-size (Conr _ x y) = 1 + size x + size y
+size (Branch _ x y) = 1 + size x + size y
 
 mymod n 0 = 0
 mymod n m = mod n m
 
-floorlg2 x =
-    case x `div` 2 of
-      0 -> 0
-      y -> 1 + floorlg2 y
+------------------
+floorlg2 0 = 0
+floorlg2 1 = 0
+floorlg2 x = 1 + floorlg2 (x `div` 2)
 
---myincr :: Nat -> Nat -> Nat
-myincr real mod =
-  mymod (2^(floorlg2 (1+real))) mod
+increm real len =
+  mod (2^(floorlg2 (1+real))) len
 
---memo :: Nat -> (Prod Nat Nat) -> Option Nat
-memo n (p,i) =
-    case (compare p n, compare i (myincr p n)) of
-      (LT,EQ) -> Just p
-      _ -> Nothing
+memo n = M.fromList [((p,increm p n),p) | p <- [0..(n-1)]]
+
+type Fin x = (x,x,M.Map (x,x) x)
+type Unk x a = (a,[a],x)
+type Trak' x a = Either (Fin x) (Unk x a)
+type Trak a = Trak' Integer a
 {-
-action :: (Sum (Prod (Prod Nat Nat) ((Prod Nat Nat) -> Option Nat))
-          (Prod (Prod a1 (CoList a1)) Nat)) -> Sum
-          (Prod (Prod Nat Nat) ((Prod Nat Nat) -> Option Nat))
-          (Prod (Prod a1 (CoList a1)) Nat)
--}
-type LHS x = (x,x,(x,x) -> Maybe x)
-type RHS x a = (a,[a],x)
-type Trip' x a = Either (LHS x) (RHS x a)
-type Trip a = Trip' Integer a
+action x@(Left (r,_,_)) = 
+    D.trace ("Left:"++(show r)++"\n") action' x
+action x@(Right (_,_,r)) = 
+    D.trace ("Right: "++(show r)++"\n") action' x
+  -}
+action = action'  
 
-action :: Trip a -> Trip a
-action (Left (real,mod,f)) =
-    Left (real+1,mod,
-          case f (mymod real mod, myincr real mod) of
-            Just _ -> f
-            Nothing -> 
-                (\(p,i) ->
-                 if (p == mymod real mod) && (i == myincr real mod)
-                 then Just real
-                 else f (p,i)))
-action (Right (_,[],sofar)) = Left (1+sofar,1+sofar,memo (1+sofar))
-action (Right (_,hed:tyl,sofar)) = Right (hed,tyl,1+sofar)
+action' :: Trak a -> Trak a
+action' (Left (real,len,f)) =
+    Left (real+1,len,
+          let addr = (mod real len, increm real len)
+          in case M.lookup addr f of
+               Just _ -> f
+               Nothing -> M.insert addr real f)
+action' (Right (_,[],sofar)) = Left (1+sofar,1+sofar,memo (1+sofar))
+action' (Right (_,hed:tyl,sofar)) = Right (hed,tyl,1+sofar)
+
+checkBack :: [a] -> Trak a -> Either a [Bool]
+checkBack whole (Left (real,len,f)) =
+    case M.lookup (mod real len,increm real len) f of
+      Just bak -> Right (order bak)
+      Nothing -> Left (whole `genericIndex` (mod real len)) 
+checkBack _ (Right (hed,_,_)) = Left hed
+
+kill :: BS (Either a [Bool]) -> BraunRef a
+kill (BS (Left h) o e) = Branch h (kill o) (kill e)
+kill (BS (Right v) _ _) = Ref v
+    
+trunc :: [a] -> BS (Trak a) -> BraunRef a
+trunc w x = kill (fmap5 (checkBack w) x)
+
+main = 
+    do n <- readLn
+       let (x:xs) = [1..n]
+       print (bcycle x xs)
+
+unref x = let ans = unref' ans x
+          in ans
+unref' cont (Ref v) = substream cont v
+unref' cont (Branch h o e) = BS h (unref' cont o) (unref' cont e)
+substream x [] = x
+substream (BS _ o _) (True:r) = substream o r
+substream (BS _ _ e) (False:r) = substream e r
+
 {-
-mat' :: (Prod a1 (CoList a1)) -> (CoList a1) -> Nat -> a1
-mat' whole rem n =
-  case n of
-    O ->
-      (case rem of
-         Nil -> (case whole of
-                   Pair ans x -> ans)
-         Cons ans c -> ans)
-    S m ->
-      (case rem of
-         Nil -> mat' whole (case whole of
-                              Pair x rest -> rest) m
-         Cons a rest -> mat' whole rest m)
-
-mat :: (Prod a1 (CoList a1)) -> Nat -> a1
-mat whole n =
-  mat' whole (case whole of
-                Pair hed tyl -> Cons hed tyl) n
+trunc whole (BS (Left (real,len,f)) od ev) =
+    case f (mod real len,increm real len) of
+      Just bak -> Ref (order bak)
+      Nothing -> Branch (whole `genericIndex` (mod real len)) 
+                        (trunc whole od) 
+                        (trunc whole ev)
+trunc whole (BS (Right (hed,_,_)) od ev) =
+    Branch hed (trunc whole od)
+               (trunc whole ev)
 -}
-{-
-trunk :: (Prod a1 (CoList a1)) -> (Braun
-            (Sum (Prod (Prod Nat Nat) ((Prod Nat Nat) -> Option Nat))
-            (Prod (Prod a1 (CoList a1)) Nat))) -> BraunRef 
-            a1
--}
-trunkate :: [a] -> Braun (Trip a) -> BraunRef a
-trunkate whole (Conb (Left (real,mod,f)) od ev) =
-    case f (mymod real mod,myincr real mod) of
-      Just bak -> Ref bak
-      Nothing -> Conr (whole `genericIndex` (mymod real mod)) 
-                      (trunkate whole od) 
-                      (trunkate whole ev)
-trunkate whole (Conb (Right (hed,c,n)) od ev) =
-    Conr hed (trunkate whole od)
-             (trunkate whole ev)
-{-
-cycle :: (() -> (() -> ()) -> () -> Braun ()) -> a1 -> (CoList 
-         a1) -> BraunRef a1
--}
-iterateSlow :: (a->a) -> a -> Braun a
-iterateSlow f x =
-  let g z = f (f z)
-      y = f x 
-  in Conb x (iterateSlow g y) (iterateSlow g (f y))
-
-instance Functor Braun where
-    fmap f (Conb h o e) = Conb (f h) (fmap f o) (fmap f e)
-
-oddFromEven :: (a -> a) -> a -> Braun a -> Braun a
-oddFromEven f x  ~(Conb h od ev) =
-    Conb x (oddFromEven f (f h) ev) (fmap f od)
-
-iterateFast :: (a -> a) -> a -> Braun a
-iterateFast f x =
-    let ev = fmap f od
-        od = oddFromEven f (f x) ev
-    in
-      Conb x od ev
-
 bcycle' iter hed tyl =
-  trunkate (hed:tyl)
+  trunc (hed:tyl)
     (iter action (Right (hed,tyl,0)))
 
 bcycle x xs = bcycle' iterateFast x xs
+----------------------------------------
+
+
+{-
+cycle :: (() -> (() -> ()) -> () -> BS ()) -> a1 -> (CoList 
+         a1) -> BraunRef a1
+-}
+iterateSlow :: (a->a) -> a -> BS a
+iterateSlow f x =
+  let g z = f (f z)
+      y = f x 
+  in BS x (iterateSlow g y) (iterateSlow g (f y))
+
+instance Functor BS where
+    fmap f (BS h o e) = BS (f h) (fmap3 f o) (fmap4 f e)
+
+fmap5 = fmap
+fmap3 = fmap
+fmap4 = fmap
+fmap2 = fmap
+fmap1 = fmap
+
+oddFromEven :: (a -> a) -> a -> BS a -> BS a
+oddFromEven f x  ~(BS h od ev) =
+    BS x (oddFromEven f (f h) ev) (fmap2 f od)
+
+iterateFast :: (a -> a) -> a -> BS a
+iterateFast f x =
+    let ev = fmap1 f od
+        od = oddFromEven f (f x) ev
+    in
+      BS x od ev
+
 
 display m f =
     [((i,j),k) | i <- [0..(m-1)], j <- [0..(m-1)], k <- case f (i,j) of Just v -> [v]; _ -> []]
 
---prin :: Show a => Trip a -> String
+--prin :: Show a => Trak a -> String
 prin (Left (x,y,f)) = show (x,y, display y f)
 prin x@(Right y) = show y
 
@@ -153,33 +163,48 @@ order n =
       (m,0) -> False:(order (m-1))
       (m,1) -> True:(order m)
 
-srat' g (Ref n) b = 
-    let (h,o,e) = srat g (order n)
-    in srat' g (Conr h o e) b
-srat' g (Conr h o e) [] = (h,o,e)
-srat' g (Conr _ o _) (True:b) = srat' g o b
-srat' g (Conr _ _ e) (False:b) = srat' g e b
+{-
+context g (Branch h o e) [] = (h,o,e)
+context g (Branch _ o _) (True:b) = context g o b
+context g (Branch _ _ e) (False:b) = context g e b
+context g (Ref n) b = triple g (n++b)
 
-srat g b = srat' g g b
-rat g b = 
-    let (h,_,_) = srat g b 
+triple g b = context g g b
+trace g b = 
+    let (h,_,_) = triple g b 
     in h
+-}
+context g (Branch v _ _) [] = v
+context g (Branch _ o _) (True:r) = context g o r
+context g (Branch _ _ e) (False:r) = context g e r
+context g (Ref p) r = context g g (p++r)
 
+trace g b = context g g b
+{-
+context g (Branch h o e) [] = (h,o,e)
+context g (Branch _ o _) (True:b) = context g o b
+context g (Branch _ _ e) (False:b) = context g e b
+context g (Ref n) b = context g g (n++b)
+
+trace g b = 
+    let (h,_,_) = context g g b 
+    in h
+-}
 {-
 rat (bcycle 0 [1]) (order 7)
-rat (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) [True,True,True]
-srat (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) [True,True,True]
-srat' (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) [True,True,True]
-srat' (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) (Conr 1 (Ref 1) (Ref 1)) [True,True]
-srat' (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) (Ref 1) [True]
-srat (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) (order 1)
-srat (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) [True]
-srat' (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) (Conr 0 (Conr 1 (Ref 1) (Ref 1)) (Conr 0 (Ref 2) (Ref 2))) [True]
+rat (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) [True,True,True]
+srat (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) [True,True,True]
+srat' (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) [True,True,True]
+srat' (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) (Branch 1 (Ref 1) (Ref 1)) [True,True]
+srat' (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) (Ref 1) [True]
+srat (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) (order 1)
+srat (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) [True]
+srat' (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) (Branch 0 (Branch 1 (Ref 1) (Ref 1)) (Branch 0 (Ref 2) (Ref 2))) [True]
 -}
 
-bat (Conb h _ _) [] = h
-bat (Conb _ o _) (True:b) = bat o b
-bat (Conb _ _ e) (False:b) = bat e b
+bat (BS h _ _) [] = h
+bat (BS _ o _) (True:b) = bat o b
+bat (BS _ _ e) (False:b) = bat e b
 
 lcycle x xs =
     let ans = nex x xs
