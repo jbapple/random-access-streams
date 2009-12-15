@@ -226,9 +226,9 @@ slowFromLStream :: LStream a -> Stream a
 slowFromLStream (Cons x xs) = cons x (slowFromLStream xs)
 \end{alltt}
 
-As Okasaki notes, this algorithm takes $O(n \log n)$ time \cite{okasakiBraun}.
+As Okasaki notes, this algorithm takes $\Omega(n \log n)$ time \cite{okasakiBraun}.
 For streams, the details of what this means are complicated by the fact that there is no finite $n$ that is the size of the list.
-Given a linear stream forced to depth $i$ and a Braun stream constructed from it using {\tt slowFromLStream}, forcing the first $i$ nodes of the Braun stream will take $O(i \log i)$ time.
+Given a linear stream forced to depth $i$ and a Braun stream constructed from it using {\tt slowFromLStream}, forcing the first $i$ nodes of the Braun stream will take $\Omega(i \log i)$ time.
 This is because {\tt cons} calls itself recursively on one of the two subtrees, as can be seen in Fig.~\ref{braunCons}.
 
 Okasaki presents a function {\tt makeArray} that builds a Braun tree from a linear list in $O(n)$ time, where $n$ is the length of the list \cite{okasakiBraun}.
