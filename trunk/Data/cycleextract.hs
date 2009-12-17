@@ -1,11 +1,14 @@
 {-# OPTIONS_GHC -cpp -fglasgow-exts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {- For Hugs, use the option -F"cpp -P -traditional" -}
 
 module Cycleextract where
 
 import qualified Debug.Trace as D
-import List(genericIndex)
+import List(genericIndex,nub,genericLength)
 import qualified Data.Map as M
+import qualified Data.Set as S
+import Maybe
 
 data BS a = BS a (BS a) (BS a)
 
@@ -79,6 +82,15 @@ substream (BS _ o _) (True:r) = substream o r
 substream (BS _ _ e) (False:r) = substream e r
 
 {-
+Branch 0 (Branch 1 (Branch 3 (Branch 7 (Branch 15 (Branch 12 _ _) (Branch 9 (Branch 3 (Branch 10 (Branch 5 (Branch 14 (Branch 13 (Branch 11 (Branch 7 (Branch 18 (Branch 2 (Branch 8 (Branch 1 (Branch 6 (Branch 16 (Branch 17 *** Exception: stack overflow
+-}
+
+{-
+trace (bcycle 0 [1..18]) (map (== '0') "0000100000000000000")
+*** Exception: stack overflow
+-}
+
+{-
 trunc whole (BS (Left (real,len,f)) od ev) =
     case f (mod real len,increm real len) of
       Just bak -> Ref (order bak)
@@ -149,12 +161,14 @@ oddpart n =
       (m,0) -> oddpart m
       _ -> n
 
+bound :: Integer -> Integer
 bound n = 
     let m = oddpart n
         r = floorlg2 (n`div`m)
     in 
       2^(r+1) * m * beta m + 2^(r+1) - 1
 
+order :: Integer -> [Bool]
 order 0 = []
 order 1 = [True]
 order 2 = [False]
@@ -162,6 +176,13 @@ order n =
     case n`quotRem`2 of
       (m,0) -> False:(order (m-1))
       (m,1) -> True:(order m)
+
+toInt :: [Bool] -> Integer
+toInt [] = 0
+toInt (True:x) = 1 + 2*(toInt x)
+toInt (False:x) = 2 + 2*(toInt x)
+
+list = order
 
 {-
 context g (Branch h o e) [] = (h,o,e)
@@ -219,3 +240,60 @@ ncycle x xs = fromList (lcycle x xs)
 {-
 *Cycleextract> [(j,let (x:xs) = [0..j] in let a = ncycle x xs in let b = bcycle x xs in and [bat a i == rat b i | i <- fmap order [0..1000]]) | j <- [0..100]]
 -}
+
+twoOdd :: Integer -> [(Integer,Integer)]
+twoOdd n = [(i,j) | i <- uniq [(2^k) `mod` n| k <- [0..(n-1)]], j <- [0..(n-1)]]
+{-
+*Cycleextract> and [let j = 2*i+1 in 2 * (genericLength $ twoOdd j) + 1 == bound j | i <- [0..1000]]
+-}
+
+uniq = S.toList . S.fromList
+
+twoGroup :: Integer -> [(Integer,Integer)]
+twoGroup n = 
+    case n `quotRem` 2 of
+      (_,1) -> twoOdd n
+      (m,0) -> let half = twoGroup m
+                   side v (incr,offs) = ((2*incr)`mod`n, (2*offs+v)`mod`n)
+                   oddSide = side 1
+                   evenSide = side 2
+               in (1,0):(map oddSide half)++(map evenSide half)
+
+twist :: BS a -> [a] -> Integer -> ((Integer,Integer) -> BS a) -> (Integer,Integer) -> BS a
+twist top whole n fynd (incr,offs) =
+    if increm offs n == incr
+    then substream top (list incr)
+    else BS (whole `genericIndex` (offs`mod`n))
+            (fynd ((2*incr)`mod`n, (offs+incr)`mod`n))
+            (fynd ((2*incr)`mod`n, (offs+2*incr)`mod`n))
+
+memory :: BS a -> [a] -> Integer -> M.Map (Integer,Integer) (BS a)
+memory (top :: BS a) whole n = 
+    let b :: [(Integer,Integer)]
+        b = twoGroup n
+        init :: [((Integer,Integer),BS a)]
+        init = map (\x -> (x,twist top whole n fynd x)) b
+        save :: M.Map (Integer,Integer) (BS a)
+        save = M.fromList init
+        fynd :: (Integer,Integer) -> BS a
+        fynd addr = case M.lookup addr save of
+                      Just v -> v
+                      _ -> error $ ((show b)++"\n"++(show addr))
+    in save
+
+act _ _ (Right (_,y:ys,n)) = Right (y,ys,n+1)
+act top whole (Right (_,[],n)) = Left (memory top whole (n+1), n+1, n+1)
+act _ _ (Left (f, real, len)) = Left (f, real+1, len)
+
+addrOf loc len = (increm loc len, loc`mod`len)
+
+trundle (BS (Right (h,_,_)) o e) = BS h (trundle o) (trundle e)
+trundle (BS (Left (f,loc,len)) _ _) = 
+    let addr = addrOf loc len
+    in case M.lookup addr f of
+         Just v -> v
+         _ -> error ((show addr)++"\n"++(show loc)++"\n"++(show len)++"\n"++(show $ map fst $ M.toList f))
+
+qcycle w ws = let ans = trundle (iterateFast (act ans (w:ws))
+                                             (Right (w,ws,0)))
+              in ans
