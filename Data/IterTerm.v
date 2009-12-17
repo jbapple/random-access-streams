@@ -1,19 +1,40 @@
+(* 
+This file proves the productivity of iterate in:
+
+data Braun a = Braun a (Braun a) (Braun a)
+
+instance Functor Braun where
+  fmap f (Braun h o e) = Braun (f h) (fmap f o) (fmap f e)
+
+oddFromEven f x (Braun h o e) =
+  Braun x (oddFromEven f (f h) e) (fmap f o)
+
+iterate f x =
+  let od = oddFromEven f x ev
+      ev = fmap f od
+  in Braun x od ev
+
+*)
 Require Import List.
 Require Import Setoid.
+
 Set Implicit Arguments.
+(*Set Contextual Implicit.*)
+Unset Strict Implicit. 
+Set Reversible Pattern Implicit. 
 
 Section Single.
 
 Variable (A : Set).
 Variable (Aeq : relation A).
 Variable (Aeq_equiv : Equivalence Aeq).
-
-Print Aeq_equiv.
-Check Aeq_equiv.
-Print Equivalence.
+Variable F : A -> A.
+Variable F_morph : forall x y, Aeq x y -> Aeq (F x) (F y).
 
 CoInductive Braun : Set :=
 | Cons : A -> Braun -> Braun -> Braun.
+
+(* Bisimilarity is the equivalence relation we will want on Braun streams *)
 
 CoInductive coeq : Braun -> Braun -> Prop :=
 | co : forall x y od od' ev ev', 
@@ -61,31 +82,11 @@ symmetry proved by coeq_symm
 transitivity proved by coeq_trans
 as coeq_equiv.
 
-Definition headB (x : Braun) :=
-match x with 
-| Cons h _ _ => h
-end.
-
-Definition oddB (x : Braun) :=
-match x with 
-| Cons _ od _ => od
-end.
-
-Definition evenB (x : Braun) :=
-match x with 
-| Cons _ _ ev => ev
-end.
-
-(* This one does not work
-Fixpoint unco' (x : Braun) (n : list bool) {struct n} : A :=
-match n with
-  | nil => headB x
-  | cons true  r => unco' (oddB  x) r
-  | cons false r => unco' (evenB x) r
-end.
-*)
+(* An equivalent definition of Braun streams: *)
 
 Definition Braun' := list bool -> A.
+
+(* Extensional function quality is an equivalence relation: *)
 
 Section Double.
 
@@ -120,6 +121,8 @@ End Double.
 
 Hint Unfold exteq.
 
+(* unco converts the usual Braun streams to their functional dopplegangers, Braun' *)
+
 Fixpoint unco (x : Braun) (n : list bool) {struct n} : A :=
 match x with
 | Cons h od ev =>
@@ -141,6 +144,8 @@ Ltac des :=
     | _ => auto
   end.
 
+(* unco turns bisimilar Braun streams into extensionally equal Braun' functions *)
+
 Add Parametric Morphism : unco with
   signature coeq ==> (@exteq (list bool)) as unco_mor.
 Proof.
@@ -149,9 +154,15 @@ Proof.
   auto.
 Qed.
 
+(* reco undoes the conversion, turning Braun' functions into Braun streams *)
+
 CoFixpoint reco (x : Braun') : Braun :=
 Cons (x nil) (reco (fun y => x (cons true y)))
              (reco (fun y => x (cons false y))).
+
+(* A little trick from http://adam.chlipala.net/cpdt/
+This function is useful for proofs.
+ *)
 
 Definition frob (x : Braun) : Braun :=
 match x with
@@ -162,6 +173,8 @@ Lemma frobeq : forall (x:Braun), x = frob x.
 Proof.
   destruct x. simpl. reflexivity.
 Defined.
+
+(* like unco, reco takes entensionally equivalent functions to bisimilar streams *)
 
 Add Parametric Morphism : reco with
   signature (@exteq (list bool)) ==> coeq as reco_mor.
@@ -176,6 +189,8 @@ Proof.
   apply reco_mor_Morphism. unfold exteq. auto.
   apply reco_mor_Morphism. unfold exteq. auto.
 Qed.
+
+(* unco and reco are inverses: *)
 
 Lemma unre : forall x y, exteq x y -> exteq (unco (reco x)) y.
 Proof.
@@ -215,6 +230,8 @@ Qed.
 
 Check reun'.
 
+(* bOrd converts locations in Braun streams to natural numbers *)
+
 Fixpoint bOrd (x : list bool) : nat :=
 match x with
   | nil => 0
@@ -223,21 +240,39 @@ match x with
 end.
 
 
-Variable X : A.
-Variable F : A -> A.
-Variable F_morph : forall x y, Aeq x y -> Aeq (F x) (F y).
+(* The usual record selectors: *)
 
-Definition fmap' (x : Braun') (n : list bool) : A :=
-F (x n).
+Definition headB (x : Braun) :=
+match x with 
+| Cons h _ _ => h
+end.
 
 Definition head' (x:Braun') := x nil.
+
+Definition oddB (x : Braun) :=
+match x with 
+| Cons _ od _ => od
+end.
+
 Definition odd' (x : Braun') (n : list bool) := x (true :: n).
+
+Definition evenB (x : Braun) :=
+match x with 
+| Cons _ _ ev => ev
+end.
+
 Definition even' (x : Braun') (n : list bool) := x (false :: n).
+
+(* And fmap as in Haskell's Functor class *)
 
 CoFixpoint fmapB (x:Braun) : Braun :=
 match x with
 | Cons h od ev => Cons (F h) (fmapB od) (fmapB ev)
 end.
+
+Definition fmap' (x : Braun') (n : list bool) : A :=
+F (x n).
+
 (*
 Fixpoint oddFromEven (x : A) (v : Braun') (n : list bool) {struct n} : A :=
 match n with
