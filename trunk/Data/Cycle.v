@@ -1,4 +1,8 @@
 Set Implicit Arguments.
+Set Contextual Implicit.
+Unset Strict Implicit. 
+Set Reversible Pattern Implicit. 
+(*Set Maximal Implicit Insertion.*)
 
 Require Import Setoid.
 Require Import List.
@@ -25,7 +29,7 @@ CoInductive cleq (A:Set) : CoList A -> CoList A -> Prop :=
            cleq (Cons x xs) (Cons y ys).
 
 Inductive FiniteCoList (A:Set) : CoList A -> nat -> Prop :=
-| FiniteNil : FiniteCoList (Nil A) 0
+| FiniteNil : FiniteCoList Nil 0
 | FiniteCons : forall hed tyl n, 
   FiniteCoList tyl n
   -> FiniteCoList (Cons hed tyl) (S n).
@@ -78,6 +82,8 @@ Fixpoint bat (A:Set) (x:Braun A) (b:list bool) {struct b}
       end
   end.
 
+Check bat.
+
 Fixpoint ord (x:list bool) : nat :=
   match x with
     | nil => 0
@@ -98,7 +104,7 @@ CoFixpoint repcl (A:Set) (x:A) :=
 
 Definition frobcl (A:Set) (x:CoList A) : CoList A :=
   match x with
-    | Nil => Nil _
+    | Nil => Nil
     | Cons h t => Cons h t
   end.
 
@@ -118,10 +124,10 @@ Proof.
   rewrite Heqy in infinf.
   Guarded.
   destruct y.
-  rewrite <- frobeqcl in Heqy.
+  rewrite <- (@frobeqcl _ (repcl x)) in Heqy.
   simpl in Heqy.
   inversion Heqy.
-  rewrite <- frobeqcl in Heqy.
+  rewrite <- (@frobeqcl _ (repcl x)) in Heqy.
   simpl in Heqy.
   inversion Heqy.
   subst.
@@ -133,10 +139,10 @@ Qed.
 
 CoInductive BraunRef (A:Set) : Set :=
 | Conr : A -> BraunRef A -> BraunRef A -> BraunRef A
-| Ref : nat -> BraunRef A.
+| Ref : list bool -> BraunRef A.
 
 Inductive FiniteBraun (A:Set) : BraunRef A -> nat -> Prop :=
-| FiniteRef : forall b, FiniteBraun (Ref A b) 1
+| FiniteRef : forall b, FiniteBraun (Ref b) 1
 | FiniteSum : forall h o e l r, 
   FiniteBraun o l ->
   FiniteBraun e r ->
@@ -152,11 +158,10 @@ CoFixpoint repbr (A:Set) (x:A) :=
   let r := repbr x in
   Conr x r r.
 
-
 Definition frob n (x:BraunRef n) : BraunRef n :=
   match x with
     | Conr h o e => Conr h o e
-    | Ref b => Ref _ b
+    | Ref b => Ref b
   end.
 
 Lemma frobeq : forall n (x:BraunRef n), x = frob x.
@@ -174,7 +179,7 @@ Proof.
   rewrite Heqy in infbr.
   Guarded.
   destruct y.
-  rewrite frobeq in Heqy.
+  rewrite (@frobeq _ (repbr x)) in Heqy.
   simpl in Heqy.
   inversion Heqy.
   subst.
@@ -183,11 +188,118 @@ Proof.
   apply infbr.
   apply infbr.
   Guarded.
-  rewrite frobeq in Heqy.
+  rewrite (@frobeq _ (repbr x)) in Heqy.
   simpl in Heqy.
   inversion Heqy.
   Guarded.
 Qed.
+
+CoInductive delay (a:Set) : Set :=
+  wait : delay a -> delay a
+| halt : a -> delay a.
+
+Inductive halts (a:Set) : delay a -> Set :=
+  more : forall d, halts d -> halts d
+| done : forall v, halts (halt v).
+
+Definition get a b (g:{f:a -> delay b & forall x, halts (f x)}) (y:a) : b.
+clear; intros; destruct g as [f ph].
+pose (ph y) as py.
+induction py.
+exact IHpy.
+exact v.
+Defined.
+
+Definition terminates a b c (f:a -> b -> delay c) x := 
+  forall y, halts (f x y).
+
+CoFixpoint context a g x b : delay a :=
+  match (x,b) with
+    | (Conr v _ _, nil) => halt v
+    | (Conr _ o _, true::r) => wait (context g o r)
+    | (Conr _ _ e, false::r) => wait (context g e r)
+    | (Ref p, r) => wait (context g g (p++r))
+  end.
+
+Definition trace a g b := @context a g g b.
+
+Definition wellFormed a := {s:BraunRef a & terminates (@trace _) s}.
+
+Definition gtrace a (w:wellFormed a) (b:list bool) : a.
+clear; intros.
+eapply get.
+unfold wellFormed in *.
+destruct w.
+eapply existT.
+unfold terminates in *.
+apply t. exact b.
+Defined.
+
+Print gtrace.
+
+
+(*
+Inductive Context A (g:BraunRef A) : BraunRef A -> list bool -> A -> Prop :=
+  textNil : forall v o e, Context g (Conr v o e) nil v
+| textOdd : forall v h o e r, 
+            Context g o r v ->
+            Context g (Conr h o e) (true :: r) v
+| textEve : forall v h o e r, 
+            Context g e r v ->
+            Context g (Conr h o e) (false :: r) v
+| textPnt : forall p r v,
+            Context g g (p++r) v ->
+            Context g (Ref p) r v.
+*)
+(*
+Definition Trace A g b v := @Context A g g b v.
+
+Definition WellFormed (A:Set) := 
+  {g | forall b, exists v, @Trace A g b v}.
+
+Lemma trace : forall (A:Set) (p:WellFormed A) (b:list bool), 
+  A.
+Proof.
+  clear.
+  intros.
+  destruct p.
+  pose (e b) as ev.
+  destruct ev.
+  destruct g.
+  unfold WellFormed in *.
+  pose (p b) as ev.
+  destruct ev.
+  generalize dependent A.
+  dependent induction b.
+  intros.
+  
+
+Definition trace (A:Set) g (p:WellFormed g) b : A :=
+  match p b with
+    | ex_intro v _ => v
+  end.
+*)
+Definition equivBS A (x:Braun A) y :=
+  forall b, bat x b = bat y b.
+
+Definition equivBR a (x:wellFormed a) y :=
+  forall b, gtrace x b = gtrace y b.
+
+Definition equiv a (x:Braun a) y :=
+  forall b, bat x b = gtrace y b.
+
+
+
+Check bat.
+
+Definition 
+
+
+CoInductive coeq A : Braun A -> Braun A -> Prop :=
+| co : forall x y od od' ev ev',
+        (x = y) -> coeq od od' -> coeq ev ev'
+        -> coeq (Conb x od ev) (Conb y od' ev').
+
 
 Fixpoint concrete A (b:BraunRef A) (l:list bool) : Prop :=
   match b with
@@ -1426,7 +1538,7 @@ CoFixpoint iterateSlow (A:Set) F (x:A) : Braun A :=
       Conb x (iterateSlow g y)
              (iterateSlow g (F y)).
 
-Variable iterSlow : forall (A:Set) b f (x:A), bat (iterateSlow f x) b = applyn (ord b) f x.
+Variable iterSlow : forall (A:Set) f (x:A), iterateSlow f x = iterate f x.
 
 Definition beq (A:Set) (x:Braun (nat * nat * (nat * nat -> option nat) + A * CoList A * nat)) y :=
   forall b, 
@@ -1510,6 +1622,76 @@ Proof.
   remember (upto (cycle x xs) b) as ucb.
   destruct ucb. destruct p.
   unfold cycle in *.
+  destruct b0.
+  auto.
+  generalize dependent l;
+  generalize dependent l0;
+  generalize dependent n;
+  generalize dependent x;
+  generalize dependent xs.
+  induction b; intros.
+  simpl in *.
+  unfold upto in *.
+  simpl. simpl in *.
+  inversion Hequcb. subst.
+  rewrite frobeq in H0.
+  clear Hequcb.
+  simpl in H0.
+  remember (iterate (@action _)
+               (inr (nat * nat * (nat * nat -> option nat)) (x, xs, 0))).
+  destruct b; destruct s.
+  destruct p; destruct p; simpl in *.
+  assert (inl _ (n0,n1,o) = inr _ (x,xs,0)).
+  transitivity (bat (Conb (inl (A * CoList A * nat) (n0, n1, o)) b1 b2) nil).
+  simpl; auto.
+  transitivity (bat ( iterate (@action _)
+           (inr (nat * nat * (nat * nat -> option nat)) (x, xs, 0))) nil).
+  f_equal; auto.
+  rewrite <- iterp.
+  simpl; auto.
+  inversion H.
+  destruct p; destruct p; simpl in *.
+  inversion H0.
+  destruct a; simpl in Hequcb.
+  unfold upto in *.
+  simpl in *.
+    remember (iterate (@action _)
+               (inr (nat * nat * (nat * nat -> option nat)) (x, xs, 0))).
+    destruct b0.
+    destruct s; simpl in *.
+    destruct p; destruct p; simpl in *.
+  assert (inl _ (n0,n1,o) = inr _ (x,xs,0)).
+  transitivity (bat (Conb (inl (A * CoList A * nat) (n0, n1, o)) b0_1 b0_2) nil).
+  simpl; auto.
+  transitivity (bat ( iterate (@action _)
+           (inr (nat * nat * (nat * nat -> option nat)) (x, xs, 0))) nil).
+  f_equal; auto.
+  rewrite <- iterp.
+  simpl; auto.
+  inversion H.
+  destruct p; destruct p.
+  eapply IHb.
+  rewrite <- iterSlow in Heqb0.
+  
+  eapply Hequcb.
+    
+
+  auto. auto. apply IHb. auto.
+
+  simpl; auto.
+  des
+  simpl in Hequcb.
+  destruct s; simpl in Hequcb.
+  destruct
+  rewrite (@frobeq in Hequcb.
+  
+  rewrite (@frobbeq _ (iterate (@action _) (inr _ (x,xs,0)))) in H0.
+  simpl in H0.
+  
+  simpl in H0.
+  inversion H0.
+
+  unfold truncate in *.
   
 Admitted.
 
@@ -1561,7 +1743,31 @@ Proof.
   unfold fromStream.
   transitivity (shead (bat (iterate (@stail _) (streamCycle x xs)) b)).
   rewrite <- iterp.
+
+
+  induction b.
+  simpl.
   unfold WellBraun in *.
+  rewrite find_equation.
+(*
+  pose (xp nil).
+  destruct (upto (cycle x xs) nil).
+*)
+  remember (upto (cycle x xs) nil).
+  destruct p.
+  destruct p.
+  destruct b.
+  simpl in Heqp.
+  unfold upto in Heqp.
+  unfold upto' in Heqp.
+  inversion Heqp. subst.
+  
+  transitivity 
+  unfold cycle in Heqp.
+  destruct Heqp. destruct p.
+  inversion  p.
+
+ destruct p.
   
   
   
