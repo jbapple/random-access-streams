@@ -20,8 +20,8 @@ Require Import Setoid.
 
 Set Implicit Arguments.
 (*Set Contextual Implicit.*)
-Unset Strict Implicit. 
-Set Reversible Pattern Implicit. 
+(*Unset Strict Implicit. *)
+(*Set Reversible Pattern Implicit. *)
 
 Section Single.
 
@@ -287,12 +287,14 @@ Require Import Recdef.
 
 Require Import Coq.omega.Omega.
 
+(* A Br n is a Braun stream that is only defined for indices less than n *)
+
 Definition Br (n:list bool) := 
   forall (b:list bool), bOrd b < bOrd n -> A.
 
 Require Import Arith.
 
-(*Definition Bw (n:list bool) := Braun'.*)
+(* succT n is one more than n *)
 
 Fixpoint succT (n:list bool) : list bool :=
 match n with
@@ -312,6 +314,8 @@ Hint Rewrite succTisS : bord.
 Ltac num :=
   des; autorewrite with bord in *; try omega; auto.
 
+(* twiceT n is 2*n *)
+
 Fixpoint twiceT (n:list bool) : list bool :=
 match n with
 | nil => nil
@@ -326,6 +330,12 @@ Qed.
 
 Hint Rewrite twice : bord.
 
+(* using the selectors defined above, the type of odds is 
+Br n -> Br (oddsT n)
+and the type of evens if
+Br n -> Br (evensT n)
+*)
+
 Definition oddsT (n:list bool) : list bool :=
 match n with
 | nil => nil
@@ -339,12 +349,7 @@ match n with
 | p::q => q
 end.
 
-Check unit.
-
-Check prod.
-Locate "(_,_)".
-Print pair.
-
+(*
 CoInductive Be : list bool -> Set :=
 | Bnil : Be nil
 | Bcons : forall b r, A -> Be (oddsT (b::r)) -> Be r -> Be (b::r).
@@ -399,49 +404,32 @@ match x with
 end.
 
 Print fmapE.
-
-
+*)
+(*
 Definition oddsR (n:list bool) (x:Br n) : Br (oddsT n).
 unfold Br.
 refine (fun n x => fun b p => x (true::b) _).
-(*clear A X F x Aeq Aeq_equiv.*)
-(* We need to show that if b < *)
-
 destruct n; num. 
 Defined.
-
+*)
+Program Definition oddsR (n:list bool) (x:Br n) : Br (oddsT n) :=
+  fun b p => x (true::b) _.
+Next Obligation.
+  destruct n; num.
+Defined.
 
 (* BUG *)
 (* Functional Scheme oddsR_ind := Induction for oddsR Sort Prop. *)
-
+(*
 Require Import Coq.Program.Equality.
-
+*)
 Program Definition evensR (n:list bool) (x:Br n) : Br (evensT n) :=
   fun b p => x (false::b) _.
 Next Obligation.
   destruct n; num.
 Qed.
 
-Locate "exists _ , _".
-
-Definition nsuch (b:list bool) : Prop := exists n, bOrd b < bOrd n.
-
-Print ex_intro.
-Print ex.
-Print nat.
-Print ex_ind.
-
-Check evensR.
 (*
-End Single.
-
-Extraction Language Haskell.
-Extraction Be.
-Extraction CoBr.
-Extraction fmapC.
-Extraction CoOdds.
-*)
-
 Program CoFixpoint oddFromEvenCo (x:A) (n:CoNat) (v:CoBr n) : CoBr (S n) :=
 match v with
   | CoBrCons _ h od ev => CoBrCons _ x (oddFromEvenCo (F h) ev) (fmapC od)
@@ -453,7 +441,7 @@ Next Obligation.
 Qed.
 
 Check oddFromEvenCo.
-
+*)
 (*
 Program CoFixpoint oddFromEvenPe (x : A) (n : list bool) (v : Be n) : Be (succT n) :=
 match v with
@@ -479,10 +467,17 @@ Next Obligation.
 Defined.
 *)
 
+(* 
+oddFromEvenPr' is a Br replacement for the Haskell oddFromEven above.
+It is not defined as having the type 
+
+A -> forall n, Br n -> Br (succT n) because it is recursive in a value hidden by the abbreviation Br (succT n).
+*)
+
 Program Fixpoint oddFromEvenPr' (x : A) (n : list bool) (v : Br n)  (b:list bool) (p:bOrd b < bOrd (succT n)) {struct b} : A :=
 match b with
   | nil => x
-  | true :: r => oddFromEvenPr' (F (v nil _ )) (evensR v) r _
+  | true :: r => @oddFromEvenPr' (F (v nil _ )) (evensT n) (evensR v) r _
   | false :: r => F (v (true::r) _)
 end.
 Next Obligation.
@@ -504,7 +499,7 @@ Defined.
 Lemma oddFromEvenPrTrue : forall x n v r p,
   exists i, exists j,
     @oddFromEvenPr' x n v (true::r) p =
-    oddFromEvenPr' (F (v nil i)) (evensR v) r j.
+    @oddFromEvenPr' (F (v nil i)) (evensT n) (evensR v) r j.
 Proof.
   intros.
   Locate " exists _ , _ ".
@@ -526,12 +521,6 @@ Proof.
   reflexivity.
 Defined.
 
-
-Check oddFromEvenPr'_obligation_1.
-Check oddFromEvenPr'_obligation_2.
-Check oddFromEvenPr'_obligation_3.
-
-Print oddFromEvenPr'.
 (*
 Lemma oddFrom_ind : forall (x : A) (n : list bool) (v : Br n)  (b:list bool), oddFromEvenPr' x n v b = 
 match b return (bOrd b < bOrd (succT n)) -> A with
@@ -541,24 +530,23 @@ match b return (bOrd b < bOrd (succT n)) -> A with
 end.
 *)
 
-Check oddFromEvenPr'.
-
 Definition oddFromEvenPr (x:A) (n:list bool) (v:Br n) : Br (succT n) := oddFromEvenPr' x v.
-
-Check oddFromEvenPr.
-
+(*
 Definition invariant (x:forall n, Br n) := 
   forall b, (forall n p n' p', Aeq (x n b p) (x n' b p')).
 
 Check evensR.
 
 Hint Unfold invariant.
+*)
 Hint Unfold evensR.
+
+Check evensR.
 
 Lemma evensRinvariant: 
   forall n n' (x:Br n) (x':Br n'), 
     (forall z s t, Aeq (x z s) (x' z t)) ->
-    forall m p p', Aeq (evensR x m p) (evensR x' m p').
+    forall m p p', Aeq (@evensR n x m p) (@evensR n' x' m p').
 Proof.
   intros.
   unfold evensR in *.
@@ -568,15 +556,12 @@ Defined.
 Lemma oddsRinvariant: 
   forall n n' (x:Br n) (x':Br n'), 
     (forall z s t, Aeq (x z s) (x' z t)) ->
-    forall m p p', Aeq (oddsR x m p) (oddsR x' m p').
+    forall m p p', Aeq (@oddsR n x m p) (@oddsR n' x' m p').
 Proof.
   intros.
   unfold oddsR in *.
   auto.
 Defined.
-
-
-Check oddFromEvenPr.
 
 Lemma oddFromInvariant : 
   forall n n' (x:Br n) (x':Br n'), 
@@ -642,15 +627,17 @@ Lemma oddRhelp : forall n b (p:bOrd b < bOrd n), bOrd b < bOrd (succT n).
 Proof.
   num.
 Qed.
+
+Check evenR'.
 (*
-Function oddR (n:list bool) (b:list bool) (p:bOrd b < bOrd n) {measure bOrd n} : A :=
-  let er := @evenR' n (oddR n) in
+Program Fixpoint oddR (X:A) (n:list bool) (b:list bool) (p:bOrd b < bOrd n) {measure bOrd n} : A :=
+  let er := @evenR' n (@oddR _) in
     @oddFromEvenPr (F X) n er b (@oddRhelp n b p).
 Next Obligation.
   apply obl.
 Defined.
 *)
-
+(*
 CoInductive CoPair (S T:Set) : Set :=
 | Both : S -> T -> CoPair S T.
 
@@ -691,6 +678,7 @@ Proof.
 Defined.
 
 Print nana.
+*)
 (*
 CoFixpoint oddCo : CoBr (S inf) := 
   oddFromEvenCo (F X) (sinf evenCo)
@@ -710,21 +698,25 @@ Extraction Language Haskell.
 Extraction Library Single.
 *)
 
-Program Fixpoint oddR (n:list bool) {measure bOrd n} : Br n :=
+Check oddFromEvenPr.
+
+Program Fixpoint oddR (X:A) (n:list bool) {measure bOrd n} : Br n :=
   fun b p => 
     let er := evenR' (oddR b) in
-      oddFromEvenPr (F X) er b _.
+      @oddFromEvenPr (F X) b er b _.
 Next Obligation.
   apply obl.
 Defined.
 
 Lemma oddRoddFrom : 
-  forall n b p, 
+  forall X n b p, 
     exists q,
       Aeq 
-      (oddR n b p)
-      (oddFromEvenPr (F X) (evenR' (oddR b)) b q).
+      (@oddR X n b p)
+      (@oddFromEvenPr (F X) _ (evenR' (@oddR X b)) b q).
 Proof.
+Abort.
+(*
   intros.
   eapply ex_intro.
   unfold oddR at 1.
@@ -737,6 +729,7 @@ Proof.
   apply F_morph.
   unfold oddR at 1.
 Abort.
+*)
 (*
   reflexivity.
   unfold Fix_measure_sub.
@@ -765,7 +758,7 @@ Abort.
 Abort.
 *)
 
-Definition evenR (n:list bool) : Br n := evenR' (oddR n).
+Definition evenR X (n:list bool) : Br n := evenR' (oddR X n).
 
 
 Require Import Recdef.
@@ -781,12 +774,12 @@ Function oddR (n:list bool) {measure bOrd n} : Br n :=
 *)
 (*Error: find_call_occs : Lambda*)
 
-Program Definition iterate' : Braun' :=
+Program Definition iterate' X : Braun' :=
 fun n => 
   match n with
     | nil => X
-    | true ::r => oddR (succT r) r _
-    | false::r => evenR (succT r) r _
+    | true ::r => oddR X (succT r) r _
+    | false::r => evenR X (succT r) r _
   end.
 Next Obligation.
   num.
@@ -795,7 +788,7 @@ Next Obligation.
   num.
 Defined.
 
-Definition iterate := reco iterate'.
+Definition iterate X := reco (iterate' X).
 
 (*
 Add Parametric Relation A : A (@eq A)
@@ -820,7 +813,7 @@ Extraction evenR'.
 Extraction oddR.
 Extraction oddFromEvenPr'.
 *)
-Lemma headIter : headB iterate = X.
+Lemma headIter : forall X, headB (iterate X) = X.
 Proof.
   auto.
 Qed.
@@ -882,12 +875,14 @@ Proof.
   auto using frobeq.
 Qed.
 
-Lemma evenIter : 
-    coeq (evenB iterate) (fmapB (oddB iterate)).
+Lemma evenIter : forall X,
+    coeq (evenB (iterate X)) (fmapB (oddB (iterate X))).
 Proof.
   unfold iterate.
   simpl.
-  rewrite fmapCommute.
+  Check fmapCommute.
+  intros X.
+  rewrite fmapCommute. 
   Locate " /\ ".
   Print and.
   Print proj1.
@@ -908,12 +903,13 @@ Definition oddFromEven (x:A) (w:Braun) :=
 Print iterate. Print iterate'.
 Print oddR.
 
-Lemma oddIter : 
-    coeq (oddB iterate) (oddFromEven (F X) (evenB iterate)).
+Lemma oddIter : forall X,
+    coeq (oddB (iterate X)) (oddFromEven (F X) (evenB (iterate X))).
 Proof.
   unfold iterate.
   simpl.
   unfold oddFromEven.
+  intros X.
   eapply (fun p q => proj2 (coext p q)).
   unfold exteq.
   intros n.
