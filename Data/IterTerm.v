@@ -616,6 +616,16 @@ Qed.
 Program Definition fmapR (n:list bool) (x:Br n) : Br n :=
   fun b p => F (x b _).
 
+Lemma fmapInvariant: 
+  forall n n' (x:Br n) (x':Br n'), 
+    (forall z s t, Aeq (x z s) (x' z t)) ->
+    forall m p p', Aeq (@fmapR n x m p) (@fmapR n' x' m p').
+Proof.
+  intros.
+  unfold fmapR in *.
+  auto.
+Qed.
+
 Definition evenR' (n:list bool) (od:Br n) : Br n := fmapR od.
 
 Lemma obl : forall b, bOrd b < bOrd (succT b).
@@ -629,6 +639,7 @@ Proof.
 Qed.
 
 Check evenR'.
+
 (*
 Program Fixpoint oddR (X:A) (n:list bool) (b:list bool) (p:bOrd b < bOrd n) {measure bOrd n} : A :=
   let er := @evenR' n (@oddR _) in
@@ -638,67 +649,11 @@ Next Obligation.
 Defined.
 *)
 (*
-CoInductive CoPair (S T:Set) : Set :=
-| Both : S -> T -> CoPair S T.
-
-Definition First (S T:Set) (x:CoPair S T) : S := 
-  match x with
-    | Both y _ => y
-  end.
-
-Definition Second (S T:Set) (x:CoPair S T) : S := 
-  match x with
-    | Both y _ => y
-  end.
-
-CoFixpoint inf : CoNat := S inf.
-
-Definition sinf (x: CoBr (S inf)) : CoBr inf.
-intros.
-rewrite nana.
-simpl.
-apply x.
-Defined.
-
-Print sinf.
-
-Definition infs (x: CoBr inf) : CoBr (S inf).
-intros.
-rewrite nana in x.
-simpl in x.
-apply x.
-Defined.
-
-Lemma ssinf : inf = S inf.
-Proof.
-  symmetry.
-  rewrite nana.
-  simpl.
-  reflexivity.
-Defined.
-
-Print nana.
-*)
-(*
-CoFixpoint oddCo : CoBr (S inf) := 
-  oddFromEvenCo (F X) (sinf evenCo)
-with evenCo : CoBr (S inf) :=
-  fmapC oddCo.
-*)
-(*
-Definition coj := oddCo.
-*)
-(*
-End Single.
-
-
-
-Extraction Language Haskell.
-
-Extraction Library Single.
+Function oddR (X:A) (n:list bool) (b:list bool) (p:bOrd b < bOrd n) {measure bOrd n} : A := @oddFromEvenPr (F X) b (evenR' (oddR X b)) b (obl b).
+(*Error: find_call_occs : Lambda*)
+(* Error: Unable to find an instance for the variables b, p.*)
 *)
 
-Check oddFromEvenPr.
 
 Program Fixpoint oddR (X:A) (n:list bool) {measure bOrd n} : Br n :=
   fun b p => 
@@ -708,6 +663,13 @@ Next Obligation.
   apply obl.
 Defined.
 
+(*
+Functional Scheme oddRsc := Induction for oddR Sort Prop.
+Error: Cannot define graph(s) for oddR
+*)
+
+
+
 Lemma oddRoddFrom : 
   forall X n b p, 
     exists q,
@@ -715,6 +677,91 @@ Lemma oddRoddFrom :
       (@oddR X n b p)
       (@oddFromEvenPr (F X) _ (evenR' (@oddR X b)) b q).
 Proof.
+  intros.
+  assert (bOrd b < bOrd (succT b)) as q.
+  num.
+  exists q.
+  remember (bOrd n) as nn in |- *.
+  generalize dependent b.
+  generalize dependent n.
+  induction nn; intros.
+  induction n.
+  simpl in p; induction b; simpl in p; inversion p.
+  destruct a; simpl in *; inversion Heqnn.
+
+  unfold oddR at 1.
+  Check Fix_measure_sub.
+  Print Fix_measure_sub.
+  pose (fun (n0 : list bool)
+           (oddR0 : forall n' : {n' : list bool | bOrd n' < bOrd n0},
+                    Br (proj1_sig n')) (b0 : list bool)
+           (p0 : bOrd b0 < bOrd n0) =>
+         let er :=
+           evenR'
+             (oddR0
+                (exist (fun n' : list bool => bOrd n' < bOrd n0) b0
+                   (oddR_obligation_1 X n0 oddR0 b0 p0))) in
+         oddFromEvenPr (F X) er b0 (oddR_obligation_2 X n0 oddR0 b0 p0))
+  as I.
+  fold I.
+  unfold Fix_measure_sub.
+  rewrite F_unfold.
+  apply oddFromInvariant.
+  intros.
+  unfold evenR'.
+  apply fmapInvariant.
+  intros.
+  simpl in s0.
+  fold I.
+  unfold oddR.
+  unfold Fix_measure_sub.
+  unfold evenR'.
+  Check oddFromInvariant.
+  Check Fix_measure_F_sub.
+  erewrite Fix_measure_F_inv.
+  unfold proj1_sig.
+  Print Equivalence.
+  Check Equivalence_Reflexive.
+  apply Equivalence_Reflexive.
+
+  eapply Equivalence_Reflexive.
+
+  unfold proj1_sig at 1.
+
+. simpl.
+
+  rewrite Fix_measure_F_eq.
+
+  erewrite Fix_measure_F_inv.
+  rewrite 
+  apply Equivalence_Reflexive.
+  Print Equivalence.
+  Check (fun A => @Equivalence A).
+  Check 
+  auto.
+
+  unfold oddR at 1 in IHnn.
+  unfold Fix_measure_sub in IHnn.
+  rewrite F_unfold in IHnn.
+
+
+
+
+  simpl in I.
+
+  unfold fmapR.
+  apply F_morph.
+  fold (Fix_measure_sub _ _).
+  apply evensRinvariant.
+  fold Fix_measure_sub.
+  f_equal.
+  f_equal.
+  
+  simpl
+
+  unfold Fix_measure_sub.
+  unfold Fix_measure_F_sub.
+  intros  
 Abort.
 (*
   intros.
@@ -773,6 +820,22 @@ Function oddR (n:list bool) {measure bOrd n} : Br n :=
   fun b p => oddFromEvenPr (F X) b (evenR' b (oddR b)) b (obl b).
 *)
 (*Error: find_call_occs : Lambda*)
+
+(*
+Program Definition iterate' X n : Br n :=
+fun b p => 
+  match b with
+    | nil => X
+    | true ::r => oddR X (succT (succT r)) r _
+    | false::r => evenR X (succT r) r _
+  end.
+Next Obligation.
+  num.
+Defined.
+Next Obligation.
+  num.
+Defined.
+*)
 
 Program Definition iterate' X : Braun' :=
 fun n => 
