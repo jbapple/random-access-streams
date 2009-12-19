@@ -668,7 +668,7 @@ Functional Scheme oddRsc := Induction for oddR Sort Prop.
 Error: Cannot define graph(s) for oddR
 *)
 
-
+Axiom proofIrrel : forall (P:Prop) (p q:P), p = q.
 
 Lemma oddRoddFrom : 
   forall X n b p, 
@@ -718,10 +718,64 @@ Proof.
   unfold evenR'.
   Check oddFromInvariant.
   Check Fix_measure_F_sub.
-  erewrite Fix_measure_F_inv.
+  Check (lt_wf (bOrd b)).
+  Check Fix_measure_F_inv.
+  
+  erewrite Fix_measure_F_inv with (m := (fun n0 : list bool => bOrd n0)) (s := (lt_wf ((fun n0 : list bool => bOrd n0) b))).
   unfold proj1_sig.
   Print Equivalence.
   Check Equivalence_Reflexive.
+  Print Reflexive.
+  Print Acc.
+  rewrite (proofIrrel s0 t0).
+  apply Equivalence_Reflexive.
+Qed.
+
+  auto.
+
+  rewrite Fix_measure_F_inv with (s := t0).
+  
+  pose (Fix_measure_F_sub (list bool) (fun n0 : list bool => bOrd n0)
+        (fun n0 : list bool => Br n0)
+        (fun (n0 : list bool)
+           (oddR0 : forall n' : {n' : list bool | bOrd n' < bOrd n0},
+                    Br (let (a, _) := n' in a)) (b0 : list bool)
+           (p0 : bOrd b0 < bOrd n0) =>
+         oddFromEvenPr (F X)
+           (fmapR
+              (oddR0
+                 (exist (fun n' : list bool => bOrd n' < bOrd n0) b0
+                    (oddR_obligation_1 X n0 oddR0 b0 p0)))) b0
+           (oddR_obligation_2 X n0 oddR0 b0 p0)) b 
+        (lt_wf (bOrd b)) z0 s0) as J.
+  Check (@Equivalence_Reflexive A Aeq Aeq_equiv J).
+  pose (@Equivalence_Reflexive A Aeq Aeq_equiv) as R.
+  unfold Reflexive in R.
+  pose (R J) as L.
+  unfold J in L.
+  remember (Fix_measure_F_sub (list bool) (fun n0 : list bool => bOrd n0)
+        (fun n0 : list bool => Br n0)
+        (fun (n0 : list bool)
+           (oddR0 : forall n' : {n' : list bool | bOrd n' < bOrd n0},
+                    Br (let (a, _) := n' in a)) (b0 : list bool)
+           (p0 : bOrd b0 < bOrd n0) =>
+         oddFromEvenPr (F X)
+           (fmapR
+              (oddR0
+                 (exist (fun n' : list bool => bOrd n' < bOrd n0) b0
+                    (oddR_obligation_1 X n0 oddR0 b0 p0)))) b0
+           (oddR_obligation_2 X n0 oddR0 b0 p0)) b 
+        (lt_wf (bOrd b)) z0 s0) as K.
+  rewrite <- HeqK.
+  
+
+  Check F_ext.
+
+  exact L.
+  apply R.
+  erewrite Fix_measure_F_inv.
+
+  erewrite Fix_F_inv.
   apply Equivalence_Reflexive.
 
   eapply Equivalence_Reflexive.
