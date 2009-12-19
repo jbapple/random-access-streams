@@ -793,92 +793,60 @@ Proof.
   apply Equivalence_Reflexive.
 Qed.
 
+Require Import Coq.Init.Wf.
+Require Import Coq.Arith.Wf_nat.
+
+Lemma oddRInvariant : 
+  forall X n n' b p q, 
+    Aeq (@oddR X n b p)
+        (@oddR X n' b q).
+Proof.
+  Check (@well_founded_ind nat lt lt_wf).
+  intros.
+  remember (bOrd n) as nn in |- *.
+  generalize dependent b.
+  generalize dependent n.
+  generalize dependent n'.
+  generalize dependent X.
+  generalize dependent nn.
+  pose (fun (nn : nat) => forall (X : A) (n' n : list bool),
+   nn = bOrd n ->
+   forall (b : list bool) (p : bOrd b < bOrd n) (q : bOrd b < bOrd n'),
+   Aeq (oddR X n b p) (oddR X n' b q)) as P.
+  apply (@well_founded_ind nat lt lt_wf P).
+  unfold P in *; clear P.
+  intros.
+  assert (exists r,
+    Aeq 
+    (@oddR X n b p)
+    (@oddFromEvenPr (F X) _ (evenR' (@oddR X b)) b r)) as J.
+  apply oddRoddFrom.
+  destruct J.
+  assert (exists s,
+    Aeq 
+    (@oddR X n' b q)
+    (@oddFromEvenPr (F X) _ (evenR' (@oddR X b)) b s)) as I.
+  apply oddRoddFrom.
+  destruct I.
+  eapply Equivalence_Symmetric in H2.
+  assert (Aeq 
+    (oddFromEvenPr (F X) (evenR' (oddR X b)) b x0)
+    (oddFromEvenPr (F X) (evenR' (oddR X b)) b x1)).
+  apply oddFromInvariant.
+  intros.
+  unfold evenR'.
+  apply fmapInvariant.
+  intros.
+  eapply H.
+  rewrite H0.
+  apply p. auto.
+
+  eapply Equivalence_Transitive.
+  apply H1.
+  eapply Equivalence_Transitive.
+  apply H3.
   auto.
-
-  rewrite Fix_measure_F_inv with (s := t0).
-  
-  pose (Fix_measure_F_sub (list bool) (fun n0 : list bool => bOrd n0)
-        (fun n0 : list bool => Br n0)
-        (fun (n0 : list bool)
-           (oddR0 : forall n' : {n' : list bool | bOrd n' < bOrd n0},
-                    Br (let (a, _) := n' in a)) (b0 : list bool)
-           (p0 : bOrd b0 < bOrd n0) =>
-         oddFromEvenPr (F X)
-           (fmapR
-              (oddR0
-                 (exist (fun n' : list bool => bOrd n' < bOrd n0) b0
-                    (oddR_obligation_1 X n0 oddR0 b0 p0)))) b0
-           (oddR_obligation_2 X n0 oddR0 b0 p0)) b 
-        (lt_wf (bOrd b)) z0 s0) as J.
-  Check (@Equivalence_Reflexive A Aeq Aeq_equiv J).
-  pose (@Equivalence_Reflexive A Aeq Aeq_equiv) as R.
-  unfold Reflexive in R.
-  pose (R J) as L.
-  unfold J in L.
-  remember (Fix_measure_F_sub (list bool) (fun n0 : list bool => bOrd n0)
-        (fun n0 : list bool => Br n0)
-        (fun (n0 : list bool)
-           (oddR0 : forall n' : {n' : list bool | bOrd n' < bOrd n0},
-                    Br (let (a, _) := n' in a)) (b0 : list bool)
-           (p0 : bOrd b0 < bOrd n0) =>
-         oddFromEvenPr (F X)
-           (fmapR
-              (oddR0
-                 (exist (fun n' : list bool => bOrd n' < bOrd n0) b0
-                    (oddR_obligation_1 X n0 oddR0 b0 p0)))) b0
-           (oddR_obligation_2 X n0 oddR0 b0 p0)) b 
-        (lt_wf (bOrd b)) z0 s0) as K.
-  rewrite <- HeqK.
-  
-
-  Check F_ext.
-
-  exact L.
-  apply R.
-  erewrite Fix_measure_F_inv.
-
-  erewrite Fix_F_inv.
-  apply Equivalence_Reflexive.
-
-  eapply Equivalence_Reflexive.
-
-  unfold proj1_sig at 1.
-
-. simpl.
-
-  rewrite Fix_measure_F_eq.
-
-  erewrite Fix_measure_F_inv.
-  rewrite 
-  apply Equivalence_Reflexive.
-  Print Equivalence.
-  Check (fun A => @Equivalence A).
-  Check 
-  auto.
-
-  unfold oddR at 1 in IHnn.
-  unfold Fix_measure_sub in IHnn.
-  rewrite F_unfold in IHnn.
-
-
-
-
-  simpl in I.
-
-  unfold fmapR.
-  apply F_morph.
-  fold (Fix_measure_sub _ _).
-  apply evensRinvariant.
-  fold Fix_measure_sub.
-  f_equal.
-  f_equal.
-  
-  simpl
-
-  unfold Fix_measure_sub.
-  unfold Fix_measure_F_sub.
-  intros  
-Abort.
+Qed.
 (*
   intros.
   eapply ex_intro.
