@@ -667,9 +667,69 @@ Defined.
 Functional Scheme oddRsc := Induction for oddR Sort Prop.
 Error: Cannot define graph(s) for oddR
 *)
+(*
 
+From the FAQ:
+
+137  Is there an axiom-free proof of Streicher's axiom K for the equality on nat?
+Yes, because equality is decidable on nat. Here is the proof.
+*)
+Require Import Eqdep_dec.
+Require Import Peano_dec.
+
+Theorem K_nat :
+   forall (x:nat) (P:x = x -> Prop), P (refl_equal x) -> forall p:x = x, P p.
+Proof.
+  intros; apply K_dec_set with (p := p).
+  apply eq_nat_dec.
+  assumption.
+Qed.
+
+(*
+Similarly, we have
+*)
+
+Theorem eq_rect_eq_nat :
+  forall (p:nat) (Q:nat->Type) (x:Q p) (h:p=p), x = eq_rect p Q x p h.
+Proof.
+  intros; apply K_nat with (p := h); reflexivity.
+Qed.
+
+(*
+
+138  How to prove that two proofs of n<=m on nat are equal?
+This is provable without requiring any axiom because axiom K directly holds on nat. Here is a proof using question 137.
+
+*)
+
+Require Import Arith.
+
+Scheme le_ind' := Induction for le Sort Prop.
+
+Theorem le_uniqueness_proof : forall (n m : nat) (p q : n <= m), p = q.
+Proof.
+  induction p using le_ind'; intro q.
+  replace (le_n n) with
+   (eq_rect _ (fun n0 => n <= n0) (le_n n) _ (refl_equal n)).
+  2:reflexivity.
+  generalize (refl_equal n).
+     pattern n at 2 4 6 10, q; case q; [intro | intros m l e].
+      rewrite <- eq_rect_eq_nat; trivial.
+      contradiction (le_Sn_n m); rewrite <- e; assumption.
+  replace (le_S n m p) with
+   (eq_rect _ (fun n0 => n <= n0) (le_S n m p) _ (refl_equal (S m))).
+  2:reflexivity.
+   generalize (refl_equal (S m)).
+     pattern (S m) at 1 3 4 6, q; case q; [intro Heq | intros m0 l HeqS].
+      contradiction (le_Sn_n m); rewrite Heq; assumption.
+      injection HeqS; intro Heq; generalize l HeqS.
+       rewrite <- Heq; intros; rewrite <- eq_rect_eq_nat.
+       rewrite (IHp l0); reflexivity.
+Qed.
+
+(*
 Axiom proofIrrel : forall (P:Prop) (p q:P), p = q.
-
+*)
 Lemma oddRoddFrom : 
   forall X n b p, 
     exists q,
@@ -727,7 +787,9 @@ Proof.
   Check Equivalence_Reflexive.
   Print Reflexive.
   Print Acc.
-  rewrite (proofIrrel s0 t0).
+  Locate "_ < _".
+  unfold lt in s0, t0.
+  rewrite (le_uniqueness_proof s0 t0).
   apply Equivalence_Reflexive.
 Qed.
 
