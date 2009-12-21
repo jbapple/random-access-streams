@@ -330,6 +330,256 @@ Qed.
 
 Hint Rewrite twice : bord.
 
+Fixpoint evenp (n:nat) : nat+nat :=
+  match n with
+    | 0 => inl _ 0
+    | 1 => inr _ 0
+    | S (S m) => 
+      match evenp m with
+        | inl a => inl _ (S a)
+        | inr a => inr _ (S a)
+      end
+  end.
+
+Lemma evenis : let P n :=
+  match evenp n with
+    | inl x => x+x = n
+    | inr x => 1+x+x = n
+  end
+  in forall n, P n.
+Proof.
+  clear.
+  intros.
+  apply lt_wf_ind.
+  intros.
+  unfold P in *.
+  clear P.
+  destruct n0.
+  simpl; auto.
+  simpl.
+  destruct n0.
+  auto.
+  remember (evenp n0) as en.
+  destruct en.
+  assert (n1+n1 = n0).
+  assert (match evenp n0 with
+            | inl z => z + z = n0
+            | inr z => 1 + z + z = n0
+          end).
+  apply H.
+  auto.
+  rewrite <- Heqen in H0.
+  auto.
+  auto with arith.
+  omega.
+  assert (match evenp n0 with
+            | inl z => z + z = n0
+            | inr z => 1 + z + z = n0
+          end).
+  apply H.
+  auto.
+  rewrite <- Heqen in H0.
+  omega.
+Qed.
+
+Lemma evenleft : forall n x, 
+  evenp n = inl _ x -> x+x = n.
+Proof.
+  clear.
+  intros.
+  assert (match evenp n with
+            | inl x => x+x = n
+            | inr x => 1+x+x = n
+          end).
+  apply evenis.
+  rewrite H in H0. auto.
+Qed.
+
+Lemma evenright : forall n x, 
+    evenp n = inr _ x -> 1+x+x = n.
+Proof.
+  clear.
+  intros.
+  assert (match evenp n with
+            | inl x => x+x = n
+            | inr x => 1+x+x = n
+          end).
+  apply evenis.
+  rewrite H in H0. auto.
+Qed.
+
+Function unord (x:nat) {measure id x} : list bool :=
+  match x with
+    | 0 => nil
+    | S y => 
+      match evenp y with
+        | inl a => true :: unord a
+        | inr a => false :: unord a
+      end
+  end.
+clear; intros.
+unfold id.
+induction y.
+simpl in teq0.
+inversion teq0.
+auto.
+simpl in teq0.
+clear IHy.
+destruct y.
+inversion teq0.
+remember (evenp y) as ey.
+destruct ey.
+Check evenleft.
+inversion teq0.
+subst.
+clear teq0.
+Check evenleft.
+assert (n+n=y).
+apply evenleft. auto.
+omega.
+inversion teq0.
+intros.
+unfold id.
+subst.
+assert (1 + a + a = y).
+apply evenright.
+auto.
+omega.
+Defined.
+
+Lemma eventwo : forall x, evenp (x+x) = inl _ x.
+Proof.
+  clear.
+  induction x.
+  auto.
+  remember (S x + S x) as y.
+  assert (y = S (S (x+x))).
+  omega.
+  subst.
+  rewrite H.
+  unfold evenp.
+  simpl.
+  fold (evenp (x + x)).
+  rewrite IHx.
+  reflexivity.
+Qed.
+
+Lemma eventhree : forall x, evenp (S (x+x)) = inr _ x.
+Proof.
+  clear.
+  induction x.
+  auto.
+  remember (S (S x + S x)) as y.
+  assert (y = S (S (S (x+x)))).
+  omega.
+  subst.
+  rewrite H.
+  unfold evenp.
+  simpl.
+  fold (evenp (S (x + x))).
+  rewrite IHx.
+  reflexivity.
+Qed.
+
+Definition ord := bOrd.
+
+Lemma unt : forall x, unord (ord x) = x.
+Proof.
+  clear.
+  induction x.
+  auto.
+  destruct a.
+  simpl.
+  assert (forall y, y + y = y + (y + 0)).
+  intros.
+  omega.
+  rewrite <- H.
+  simpl.
+  rewrite unord_equation.
+  rewrite eventwo.
+  f_equal. auto.
+  simpl.
+  assert (forall y, y + y = y + (y + 0)).
+  intros.
+  omega.
+  rewrite <- H.
+  rewrite unord_equation.
+  rewrite eventhree.
+  f_equal. auto.
+Qed.
+
+Lemma tun : let P x := ord (unord x) = x in 
+  forall x, P x.
+Proof.
+  clear.
+  intros.
+  apply lt_wf_ind.
+  intros.
+  unfold P in *.
+  clear P.
+  destruct n.
+  auto.
+  rewrite unord_equation.
+  remember (evenp n) as en.
+  destruct en.
+  simpl.
+  rewrite H.
+  f_equal.
+  transitivity (n0 + n0).
+  omega.
+  apply evenleft. auto.
+  Check evenleft.
+  assert (n0 + n0 = n).
+  apply evenleft.
+  auto.
+  omega.
+  simpl.
+  f_equal.
+  rewrite H.
+  transitivity (S (n0 + n0)).
+  auto with arith.
+  transitivity (1 + n0 + n0).
+  auto with arith.
+  apply evenright.
+  auto.
+  assert (1 + n0 + n0 = n).
+  apply evenright. auto.
+  omega.
+Qed.
+
+Lemma bOrdInjective :
+  forall x y, bOrd x = bOrd y -> x = y.
+Proof.
+  intros x; induction x.
+  simpl; destruct y as [|a z]; auto; destruct a; simpl;
+    intros H; inversion H.
+  induction y; simpl.
+  destruct a; intros H; inversion H.
+  destruct a; destruct a0; simpl; intros H.
+  f_equal; apply IHx. omega.
+Abort.
+
+Definition predT (n:list bool) : list bool :=
+  match n with 
+    | nil => nil
+    | true::r => twiceT r
+    | false::r => true::r
+  end.
+
+Lemma succPred : 
+  forall x, x <> nil -> succT (predT x) = x.
+Proof.
+  intros; destruct x.
+  destruct H. auto.
+  destruct b; simpl.
+  rewrite <- (@unt (succT (twiceT x))).
+  num. simpl.
+  rewrite <- unt.
+  simpl. auto. auto.
+Qed.
+
+Hint Rewrite succPred : bord.
+  
 (* using the selectors defined above, the type of odds is 
 Br n -> Br (oddsT n)
 and the type of evens if
@@ -490,183 +740,6 @@ Next Obligation.
   num.
 Defined.
 
-Lemma oddFromEvenPrNil : forall x n v p,
-  @oddFromEvenPr' x n v nil p = x.
-Proof.
-  auto.
-Defined.
-
-Lemma oddFromEvenPrTrue : forall x n v r p,
-  exists i, exists j,
-    @oddFromEvenPr' x n v (true::r) p =
-    @oddFromEvenPr' (F (v nil i)) (evensT n) (evensR v) r j.
-Proof.
-  intros.
-  Locate " exists _ , _ ".
-  Print ex.
-  eapply ex_intro.
-  eapply ex_intro.
-  reflexivity.
-Defined.
-
-Lemma oddFromEvenPrFalse : forall x n v r p,
-  exists i,
-    @oddFromEvenPr' x n v (false::r) p =
-    F (v (true::r) i).
-Proof.
-  intros.
-  Locate " exists _ , _ ".
-  Print ex.
-  eapply ex_intro.
-  reflexivity.
-Defined.
-
-(*
-Lemma oddFrom_ind : forall (x : A) (n : list bool) (v : Br n)  (b:list bool), oddFromEvenPr' x n v b = 
-match b return (bOrd b < bOrd (succT n)) -> A with
-  | nil => fun _ => x
-  | true :: r => fun p => oddFromEvenPr' (F (v nil (oddFromEvenPr'_obligation_1 x n v b p) )) _ (evensR _ v) r _
-  | false :: r => fun p => F (v (true::r) _)
-end.
-*)
-
-Definition oddFromEvenPr (x:A) (n:list bool) (v:Br n) : Br (succT n) := oddFromEvenPr' x v.
-(*
-Definition invariant (x:forall n, Br n) := 
-  forall b, (forall n p n' p', Aeq (x n b p) (x n' b p')).
-
-Check evensR.
-
-Hint Unfold invariant.
-*)
-Hint Unfold evensR.
-
-Check evensR.
-
-Lemma evensRinvariant: 
-  forall n n' (x:Br n) (x':Br n'), 
-    (forall z s t, Aeq (x z s) (x' z t)) ->
-    forall m p p', Aeq (@evensR n x m p) (@evensR n' x' m p').
-Proof.
-  intros.
-  unfold evensR in *.
-  auto.
-Defined.
-
-Lemma oddsRinvariant: 
-  forall n n' (x:Br n) (x':Br n'), 
-    (forall z s t, Aeq (x z s) (x' z t)) ->
-    forall m p p', Aeq (@oddsR n x m p) (@oddsR n' x' m p').
-Proof.
-  intros.
-  unfold oddsR in *.
-  auto.
-Defined.
-
-Lemma oddFromInvariant : 
-  forall n n' (x:Br n) (x':Br n'), 
-    (forall z s t, Aeq (x z s) (x' z t)) ->
-    forall v  b p p', 
-      Aeq (@oddFromEvenPr' v n x b p)
-      (@oddFromEvenPr' v n' x' b p').
-Proof.
-  assert 
-    (forall b, 
-      forall n n' (x:Br n) (x':Br n'), 
-        (forall z s t, Aeq (x z s) (x' z t)) ->
-        forall v p p', 
-          Aeq (@oddFromEvenPr' v n x b p)
-          (@oddFromEvenPr' v n' x' b p')).
-  induction b; intros.
-  reflexivity.
-  destruct a.
-  destruct (oddFromEvenPrTrue v x p) as [? truep].
-  destruct truep as [? truep].
-  rewrite truep.
-  destruct (oddFromEvenPrTrue v x' p') as [? truep'].
-  destruct truep' as [? truep'].
-  rewrite truep'.
-  rewrite IHb.
-
-  Lemma oddFrom_morph :
-    forall x y, Aeq x y -> 
-      forall n p q r, 
-        Aeq (@oddFromEvenPr' x n p q r)
-            (@oddFromEvenPr' y n p q r).
-  Proof.
-    intros.
-    destruct q.
-    auto.
-    reflexivity.
-  Qed.
-
-  rewrite oddFrom_morph.
-  reflexivity.
-  auto using F_morph.
-  auto using evensRinvariant.
-
-  destruct (oddFromEvenPrFalse v x p) as [? falsep].
-  rewrite falsep.
-  destruct (oddFromEvenPrFalse v x' p') as [? falsep'].
-  rewrite falsep'.
-  auto using F_morph.
-  auto.
-Qed.
-
-Program Definition fmapR (n:list bool) (x:Br n) : Br n :=
-  fun b p => F (x b _).
-
-Lemma fmapInvariant: 
-  forall n n' (x:Br n) (x':Br n'), 
-    (forall z s t, Aeq (x z s) (x' z t)) ->
-    forall m p p', Aeq (@fmapR n x m p) (@fmapR n' x' m p').
-Proof.
-  intros.
-  unfold fmapR in *.
-  auto.
-Qed.
-
-Definition evenR' (n:list bool) (od:Br n) : Br n := fmapR od.
-
-Lemma obl : forall b, bOrd b < bOrd (succT b).
-Proof.
-  num.
-Defined.
-
-Lemma oddRhelp : forall n b (p:bOrd b < bOrd n), bOrd b < bOrd (succT n).
-Proof.
-  num.
-Qed.
-
-Check evenR'.
-
-(*
-Program Fixpoint oddR (X:A) (n:list bool) (b:list bool) (p:bOrd b < bOrd n) {measure bOrd n} : A :=
-  let er := @evenR' n (@oddR _) in
-    @oddFromEvenPr (F X) n er b (@oddRhelp n b p).
-Next Obligation.
-  apply obl.
-Defined.
-*)
-(*
-Function oddR (X:A) (n:list bool) (b:list bool) (p:bOrd b < bOrd n) {measure bOrd n} : A := @oddFromEvenPr (F X) b (evenR' (oddR X b)) b (obl b).
-(*Error: find_call_occs : Lambda*)
-(* Error: Unable to find an instance for the variables b, p.*)
-*)
-
-
-Program Fixpoint oddR (X:A) (n:list bool) {measure bOrd n} : Br n :=
-  fun b p => 
-    let er := evenR' (oddR b) in
-      @oddFromEvenPr (F X) b er b _.
-Next Obligation.
-  apply obl.
-Defined.
-
-(*
-Functional Scheme oddRsc := Induction for oddR Sort Prop.
-Error: Cannot define graph(s) for oddR
-*)
 (*
 
 From the FAQ:
@@ -726,6 +799,491 @@ Proof.
        rewrite <- Heq; intros; rewrite <- eq_rect_eq_nat.
        rewrite (IHp l0); reflexivity.
 Qed.
+
+Lemma oddFromEvenPrNil : forall x n v p,
+  @oddFromEvenPr' x n v nil p = x.
+Proof.
+  auto.
+Defined.
+
+Lemma oddFromEvenPrTrue : forall x n v r p i j,
+    @oddFromEvenPr' x n v (true::r) p =
+    @oddFromEvenPr' (F (v nil i)) (evensT n) (evensR v) r j.
+Proof.
+  intros.
+  simpl.
+  rewrite (le_uniqueness_proof i _).
+  rewrite (le_uniqueness_proof j _).
+  reflexivity.
+Qed.
+
+Lemma oddFromEvenPrFalse : forall x n v r p i,
+    @oddFromEvenPr' x n v (false::r) p =
+    F (v (true::r) i).
+Proof.
+  intros.
+  simpl.
+  rewrite (le_uniqueness_proof i _).
+  reflexivity.
+Qed.
+
+(*
+Lemma oddFrom_ind : forall (x : A) (n : list bool) (v : Br n)  (b:list bool), oddFromEvenPr' x n v b = 
+match b return (bOrd b < bOrd (succT n)) -> A with
+  | nil => fun _ => x
+  | true :: r => fun p => oddFromEvenPr' (F (v nil (oddFromEvenPr'_obligation_1 x n v b p) )) _ (evensR _ v) r _
+  | false :: r => fun p => F (v (true::r) _)
+end.
+*)
+
+Definition oddFromEvenPr (x:A) (n:list bool) (v:Br n) : Br (succT n) := oddFromEvenPr' x v.
+
+Definition toPrime (x:(forall n, Br n)) : Braun'.
+unfold Braun'.
+unfold Br.
+intros x l.
+apply (x (succT l) l).
+num.
+Defined.
+
+Definition fromPrime (x:Braun') : (forall n, Br n).
+unfold Braun'.
+unfold Br.
+intros x n b p.
+apply x.
+apply b.
+Defined.
+
+Lemma toFromPrime :
+  forall (x:(forall n, Br n)),
+    (forall n n' b p q, Aeq (x n b p) (x n' b q)) ->
+    let y := fromPrime (toPrime x) in
+      forall n n' b p q,
+        Aeq (x n b p) (y n' b q).
+Proof.
+  intros.
+  unfold toPrime in y.
+  unfold fromPrime in y.
+  simpl in y.
+  unfold y.
+  apply H.
+Qed.
+
+Lemma fromToPrime :
+  forall x:Braun',
+    let y := toPrime (fromPrime x) in
+      forall n,
+        Aeq (x n) (y n).
+Proof.
+  intros.
+  unfold y; unfold fromPrime; unfold toPrime.
+  apply Equivalence_Reflexive.
+Qed.
+
+Program Definition oddFrom x e :=
+  toPrime (fun n => 
+    match n with 
+      | nil => _
+      | _ => @oddFromEvenPr x (predT n) (fromPrime e (predT n))
+    end).
+Next Obligation.
+  unfold Br.
+  intros.
+  destruct b as [|a b]; simpl in H.
+  assert False.
+  inversion H.
+  inversion H0.
+  destruct a; simpl in H.
+  assert False.
+  inversion H.
+  inversion H0.
+  assert False.
+  inversion H.
+  inversion H0.
+Qed.
+Next Obligation.
+  rewrite succPred.
+  auto. auto.
+Qed.
+
+Check even'.
+  
+
+Print oddFrom.
+
+Check oddFrom.
+Check unco.
+
+Check (fun x e => reco (oddFrom x (unco e))).
+
+Definition oddFromEven x e := reco (oddFrom x (unco e)).
+Print coeq.
+Print Braun.
+
+CoFixpoint fmap (x:Braun) : Braun :=
+  match x with
+    | Cons h od ev => Cons (F h) (fmap od) (fmap ev) 
+  end.
+(*
+Lemma oddFromCoeq : 
+  forall x b,
+    coeq (oddFromEven x b)
+         (match b with
+            | Cons h od ev => Cons x (oddFromEven (F h) ev) (fmap od)
+          end).
+Proof.
+  cofix.
+  intros.
+  destruct b.
+  unfold oddFromEven at 1.
+  rewrite (frobeq (reco (oddFrom x (unco (Cons a b1 b2))))).
+  simpl.
+  constructor.
+  unfold oddFrom.
+  simpl.
+  unfold toPrime.
+  simpl. apply Equivalence_Reflexive.
+  
+  unfold oddFrom.
+  unfold toPrime.
+  simpl.
+  unfold oddFromEvenPr.
+  unfold oddFromEvenPr'.
+  erewrite oddFromEvenPrTrue.
+  apply oddFromCoeq.
+  simpl.
+  Check frob.
+  unfold oddFrom.
+  
+
+  
+  
+
+Print fromPrime.
+
+apply (x (succT l) l).
+num.
+Defined.
+
+
+Definition oddFromP (x:A) (v:
+*)
+(*
+Definition invariant (x:forall n, Br n) := 
+  forall b, (forall n p n' p', Aeq (x n b p) (x n' b p')).
+
+Check evensR.
+
+Hint Unfold invariant.
+*)
+Hint Unfold evensR.
+
+Check evensR.
+
+Lemma evensRinvariant: 
+  forall n n' (x:Br n) (x':Br n'), 
+    (forall z s t, Aeq (x z s) (x' z t)) ->
+    forall m p p', Aeq (@evensR n x m p) (@evensR n' x' m p').
+Proof.
+  intros.
+  unfold evensR in *.
+  auto.
+Defined.
+
+Lemma oddsRinvariant: 
+  forall n n' (x:Br n) (x':Br n'), 
+    (forall z s t, Aeq (x z s) (x' z t)) ->
+    forall m p p', Aeq (@oddsR n x m p) (@oddsR n' x' m p').
+Proof.
+  intros.
+  unfold oddsR in *.
+  auto.
+Defined.
+
+Lemma oddFrom_morph :
+  forall x y, Aeq x y -> 
+    forall n p q r, 
+      Aeq (@oddFromEvenPr' x n p q r)
+      (@oddFromEvenPr' y n p q r).
+Proof.
+  intros.
+  destruct q.
+  auto.
+  reflexivity.
+Qed.
+
+
+Lemma oddFromInvariant : 
+  forall n n' (x:Br n) (x':Br n'), 
+    (forall z s t, Aeq (x z s) (x' z t)) ->
+    forall v  b p p', 
+      Aeq (@oddFromEvenPr' v n x b p)
+      (@oddFromEvenPr' v n' x' b p').
+Proof.
+  intros.
+  generalize dependent n;
+    generalize dependent n';
+      generalize dependent v.
+  induction b; intros.
+  simpl. reflexivity.
+  destruct a.
+  Check oddFromEvenPrTrue.
+  assert (bOrd nil < bOrd n) as i.
+  simpl.
+  simpl in p.
+  rewrite succTisS in p. omega.
+  assert (bOrd b < bOrd (succT (evensT n))) as j.
+  simpl in p.
+  rewrite succTisS in *.
+  destruct n as [|a n]; simpl; try (omega); destruct a; simpl in *; try (omega).
+  erewrite oddFromEvenPrTrue with (i := i) (j := j).
+  assert (bOrd nil < bOrd n') as i'.
+  simpl.
+  simpl in p'.
+  rewrite succTisS in p'. omega.
+  assert (bOrd b < bOrd (succT (evensT n'))) as j'.
+  simpl in p'.
+  rewrite succTisS in *.
+  destruct n' as [|a n']; simpl; try (omega); destruct a; simpl in *; try (omega).
+  erewrite oddFromEvenPrTrue with (i := i') (j := j').
+  Check oddFrom_morph.
+  rewrite oddFrom_morph.
+  auto using evensRinvariant.
+  apply F_morph.
+  apply H.
+  assert (bOrd (true::b) < bOrd n) as i.
+  rewrite succTisS in p; simpl in *. omega.
+  erewrite oddFromEvenPrFalse with (i := i).
+  assert (bOrd (true::b) < bOrd n') as i'.
+  rewrite succTisS in p'; simpl in *. omega.
+  erewrite oddFromEvenPrFalse with (i := i').
+  apply F_morph.  
+  apply H.
+Qed.
+
+Program Definition fmapR (n:list bool) (x:Br n) : Br n :=
+  fun b p => F (x b _).
+
+Lemma fmapInvariant: 
+  forall n n' (x:Br n) (x':Br n'), 
+    (forall z s t, Aeq (x z s) (x' z t)) ->
+    forall m p p', Aeq (@fmapR n x m p) (@fmapR n' x' m p').
+Proof.
+  intros.
+  unfold fmapR in *.
+  auto.
+Qed.
+
+
+Lemma oddFromUnfold : forall x e b,
+  Aeq (oddFrom x e b)
+  (match b with
+     | nil => x
+     | true :: r => @oddFrom (F (e nil)) (even' e) r
+     | false :: r => F (e (true::r))
+   end).
+Proof.
+  intros.
+  generalize dependent x; 
+    generalize dependent e.
+  induction b; intros; simpl.
+  unfold oddFrom; simpl; auto.
+  unfold toPrime. simpl. reflexivity.
+  destruct a; simpl.
+  unfold oddFrom.
+  unfold toPrime.
+  simpl.
+  pose (succT b) as sb; fold sb;
+    destruct b as [|a b].
+  simpl in sb.
+  unfold sb. simpl.
+  apply F_morph.
+  unfold fromPrime; simpl.
+  reflexivity.
+  destruct a. simpl in *.
+  apply oddFromInvariant.
+  intros.
+  apply evensRinvariant.
+  intros.
+  unfold fromPrime.
+  Print evensR.
+  unfold evensR.
+  unfold even'.
+  reflexivity.
+  simpl in *.
+  apply F_morph.
+  unfold oddFrom.
+  unfold fromPrime.
+  unfold even'.
+  unfold evensR.
+  reflexivity.
+  unfold oddFrom.
+  unfold toPrime.
+  simpl.
+  apply F_morph.
+  unfold fromPrime.
+  reflexivity.
+Qed.
+
+Lemma allEq :
+  forall x y,
+    (forall b, Aeq (unco x b) (unco y b)) ->
+    coeq x y.
+Proof.
+  cofix.
+  intros.
+  destruct x; destruct y.
+  constructor.
+  pose (H nil) as heq.
+  simpl in heq.
+  apply heq.
+  apply allEq.
+  intros r; pose (H (true::r)) as leq.
+  simpl in leq. apply leq.
+  apply allEq.
+  intros r; pose (H (false::r)) as leq.
+  simpl in leq. apply leq.
+Qed.
+
+
+Add Parametric Morphism : oddFrom with
+  signature Aeq ==> (@exteq (list bool)) ==> (@eq (list bool)) ==> Aeq as oddFrom_mor.
+Proof.
+  intros.
+  generalize dependent x;
+    generalize dependent y;
+        generalize dependent x0;
+            generalize dependent y0.
+  induction y1; intros.
+  repeat (rewrite oddFromUnfold).
+  auto.
+  destruct a.
+  rewrite oddFromUnfold.
+  rewrite (@oddFromUnfold y y0 (true::y1)).
+  apply IHy1.
+  unfold even'.
+  unfold exteq.
+  intros.
+  unfold exteq in H0.
+  apply H0.
+  apply F_morph.
+  unfold exteq in H0.
+  apply H0.
+  rewrite oddFromUnfold.
+  rewrite (@oddFromUnfold y y0 (false::y1)).
+  apply F_morph.
+  unfold exteq in H0.
+  apply H0.
+Qed.
+  
+
+Lemma oddFromPlug :
+  forall x b,
+    match b with
+      | Cons h od ev => 
+        coeq (oddFromEven x b) 
+             (Cons x (oddFromEven (F h) ev) (fmap od))
+    end.
+Proof.
+  intros.
+  destruct b; simpl.
+  unfold oddFromEven.
+  apply allEq.
+  intros.
+  destruct b as [|h t].
+  simpl.
+  rewrite oddFromUnfold.
+  reflexivity.
+  destruct h; simpl.
+  Check unco_mor.
+  pose unco_mor as unco_help.
+  unfold exteq in unco_help.
+  apply unco_help.
+  pose reco_mor as reco_help.
+  apply reco_help.
+  unfold exteq.
+  intros r.
+  rewrite oddFromUnfold.
+  simpl.
+  unfold even'.
+  simpl.
+  apply oddFrom_mor.
+  reflexivity.
+  unfold exteq; intros.
+  reflexivity. reflexivity.
+  
+  pose unco_mor as unco_help.
+  unfold exteq in unco_help.
+  apply unco_help.
+  simpl.
+  Check Equivalence_Transitive.
+  Print Transitive.
+  Check oddFromUnfold.
+  eapply Equivalence_Transitive with (y := reco (fun z => F (unco (Cons a b1 b2) (true :: z)))).
+  apply reco_mor.
+  unfold exteq.
+  intros.
+  apply oddFromUnfold.
+  simpl.
+  apply allEq.
+  intros.
+  clear unco_help.
+  generalize dependent b1.
+  induction b.
+  simpl.
+  destruct b1; simpl. reflexivity.
+  destruct a0.
+  simpl.
+  intros.
+  destruct b1. 
+  apply IHb.
+  intros.
+  simpl.
+  destruct b1.
+  apply IHb.
+Qed.
+
+Definition evenR' (n:list bool) (od:Br n) : Br n := fmapR od.
+
+Lemma obl : forall b, bOrd b < bOrd (succT b).
+Proof.
+  num.
+Defined.
+
+Lemma oddRhelp : forall n b (p:bOrd b < bOrd n), bOrd b < bOrd (succT n).
+Proof.
+  num.
+Qed.
+
+Check evenR'.
+
+(*
+Program Fixpoint oddR (X:A) (n:list bool) (b:list bool) (p:bOrd b < bOrd n) {measure bOrd n} : A :=
+  let er := @evenR' n (@oddR _) in
+    @oddFromEvenPr (F X) n er b (@oddRhelp n b p).
+Next Obligation.
+  apply obl.
+Defined.
+*)
+(*
+Function oddR (X:A) (n:list bool) (b:list bool) (p:bOrd b < bOrd n) {measure bOrd n} : A := @oddFromEvenPr (F X) b (evenR' (oddR X b)) b (obl b).
+(*Error: find_call_occs : Lambda*)
+(* Error: Unable to find an instance for the variables b, p.*)
+*)
+
+
+Program Fixpoint oddR (X:A) (n:list bool) {measure bOrd n} : Br n :=
+  fun b p => 
+    let er := evenR' (oddR b) in
+      @oddFromEvenPr (F X) b er b _.
+Next Obligation.
+  apply obl.
+Defined.
+
+(*
+Functional Scheme oddRsc := Induction for oddR Sort Prop.
+Error: Cannot define graph(s) for oddR
+*)
 
 (*
 Axiom proofIrrel : forall (P:Prop) (p q:P), p = q.
@@ -847,50 +1405,8 @@ Proof.
   apply H3.
   auto.
 Qed.
-(*
-  intros.
-  eapply ex_intro.
-  unfold oddR at 1.
-  unfold Fix_measure_sub.
-  rewrite F_unfold.
-  apply oddFromInvariant.
-  intros.
-  unfold evenR'.
-  unfold fmapR.
-  apply F_morph.
-  unfold oddR at 1.
-Abort.
-*)
-(*
-  reflexivity.
-  unfold Fix_measure_sub.
-  simpl.
-  reflexivity.
-  rewrite <- Fix_measure_F_eq.
-  Require Import Program.Wf.WfExtensionality.
-  unfold_sub.
-  unfold Fix_measure_sub at 1.
-  unfold Fix_measure_F_sub at 1.
-  simpl.
-  apply oddFromInvariant.
-  intros.
-  unfold evenR'.
-  unfold fmapR.
-  apply F_morph.
-  simpl.
-  fold oddR. fold evenR'. 
-  simpl. auto. eauto.
-  eapply Equivalence_Reflexive.
-  reflexivity.
-  unfold evenR'.
-  simpl.
-  unfold fmapR. simpl.
-  reflexivity.
-Abort.
-*)
 
 Definition evenR X (n:list bool) : Br n := evenR' (oddR X n).
-
 
 Require Import Recdef.
 
@@ -936,6 +1452,8 @@ Next Obligation.
 Defined.
 
 Definition iterate X := reco (iterate' X).
+
+
 
 (*
 Add Parametric Relation A : A (@eq A)
