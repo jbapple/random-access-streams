@@ -349,7 +349,7 @@ Lemma subHelp :
 Proof.
   intros; omega.
 Qed.
-
+(*
 Program Fixpoint sub (x:nat) (y:nat) (p: x >= y) {struct x} :  nat :=
   match x with
     | S n => 
@@ -422,14 +422,14 @@ Proof.
   destruct 
 *)
     
-
+*)
 
 Definition half (x:list bool) :=
   match x with
     | nil => nil
     | _ :: y => y
   end.
-
+(*
 Lemma dec1pow :
   forall k, pow 2 k >= 1.
 Proof.
@@ -450,7 +450,7 @@ Proof.
   induction k; simpl.
   auto. omega.
 Defined.
-
+*)
 Lemma applyAdd :
   forall f n m x,
     applyn n f (applyn m f x) =
@@ -484,7 +484,7 @@ Qed.
 
 Hint Rewrite applyMul : arith.
 Hint Resolve applyMul.
-
+(*
 Lemma subPlus : forall ab a b c c' p q, 
   ab = a+b -> c = c' -> 
   @sub ab c p = a + @sub b c' q.
@@ -589,7 +589,7 @@ Defined.
 
 Hint Rewrite subPow2Div : arith.
 Hint Resolve subPow2Div.
-
+*)
 Lemma fmapbat : forall f b x,
   bat (fmap f x) b = f (bat x b).
 Proof.
@@ -670,12 +670,12 @@ Lemma mainLemma :
       Aeq (bat e j)
       (applyn (ord j)
       (applyn (pow 2 k) f) 
-      (applyn (sub (*(pow 2 (k+1)) 2*) (dec2pow k)) f x))) ->
+      (applyn ((pow 2 (k+1)) - 2) f x))) ->
     Aeq (bat (oddFromEven f 
-      (applyn (sub (*(pow 2 k) 1*) (dec1pow k)) f x) e) b) (
+      (applyn ((pow 2 k) - 1) f x) e) b) (
     applyn (ord b)
     (applyn (pow 2 k) f) 
-    (applyn (sub (*(pow 2 k) 1*) (dec1pow k)) f x)).
+    (applyn ((pow 2 k) - 1) f x)).
 Proof.
   (* We prove this by induction on b. *)
 
@@ -686,8 +686,8 @@ Proof.
   erewrite oddFromUnfold.
   reflexivity.
 
-  pose (oddFromEven f (applyn (sub (dec1pow k)) f x) (Conb hd odd even)) as oo.
-  assert (coeq oo (oddFromEven f (applyn (sub (dec1pow k)) f x) (Conb hd odd even))) as ooo.
+  pose (oddFromEven f (applyn (pow 2 k - 1) f x) (Conb hd odd even)) as oo.
+  assert (coeq oo (oddFromEven f (applyn (pow 2 k - 1) f x) (Conb hd odd even))) as ooo.
   reflexivity.
   rewrite oddFromUnfold in ooo.
   fold oo.
@@ -698,20 +698,33 @@ Proof.
   (* For the odd branch *)
 
   transitivity
-    (bat (oddFromEven f (applyn (sub (dec1pow (S k))) f x) even) b); auto.
+    (bat (oddFromEven f (applyn (pow 2 (S k) - 1) f x) even) b); auto.
   transitivity 
-    (bat (oddFromEven f (applyn (S (sub (dec2pow k))) f x) even) b); auto.
+    (bat (oddFromEven f (applyn (S (pow 2 (S k) - 2)) f x) even) b); auto.
   repeat (repeat (apply batmor); unfold applyn).
-  fold (applyn (sub (dec2pow k)) f x).
+  fold (applyn (pow 2 (S k) - 2) f x).
   apply oddFromMorph.
   assumption. apply H.
+  assert (forall k, S k = k + 1) as sk.
+  intros; omega.
+  rewrite <- sk in H0.  
   apply H0 with (j := nil).
   simpl; omega. reflexivity. reflexivity.
   apply batmor.
   apply oddFromMorph.
   assumption.
-  apply applynMorph.
-  auto with arith. assumption. reflexivity. reflexivity. reflexivity.
+  apply applynMorph. 
+  Lemma helppow : forall k, S (pow 2 (S k) - 2) = pow 2 (S k) - 1.
+  Proof.
+    clear.
+    induction k.
+    unfold pow. omega.
+    unfold pow; fold (pow 2 (S k)).
+    simpl. simpl in IHk.
+    omega.
+  Qed.
+  apply helppow.
+  assumption. reflexivity. reflexivity. reflexivity.
 
   rewrite IHb.
 
@@ -729,7 +742,11 @@ Proof.
   rewrite H0.
   autorewrite with arith.
   apply applynMorph.
-  unfold ord; fold (ord j).
+  unfold ord; fold (ord j). simpl.
+  assert (forall k, S k = k + 1) as sk.
+  intros; omega.
+  rewrite <- sk.
+  
   unfold pow; fold (pow 2 k).
   simpl. 
   repeat (rewrite mult_plus_distr_l).
@@ -746,8 +763,12 @@ Proof.
   unfold bat at 2; fold (bat odd b).
   reflexivity.
 
-  transitivity (applyn 1 f ((applyn (ord (true::b)) (applyn (pow 2 k) f) (applyn (sub (dec2pow k)) f x)))).
+  transitivity (applyn 1 f ((applyn (ord (true::b)) (applyn (pow 2 k) f) (applyn (pow 2 (S k) - 2) f x)))).
   apply applynMorph. reflexivity. assumption.
+  assert (forall k, S k = k + 1) as sk.
+  intros; omega.
+  rewrite <- sk in H0.
+
   apply H0. unfold ord; fold (ord b); omega.
 
   autorewrite with arith.
@@ -759,9 +780,15 @@ Proof.
   f_equal.
   *)
   unfold ord; fold (ord b).
+  simpl. 
   
-  assert (S (sub (dec1pow k)) = pow 2 k). auto using plusMinus.
-  remember (sub (dec1pow k)) as km.
+  assert (S (pow 2 k - 1) = pow 2 k). 
+  clear.
+  induction k. simpl. reflexivity.
+  simpl.
+  rewrite <- IHk.
+  omega.
+  remember (pow 2 k - 1) as km.
   destruct km; simpl; omega. assumption. reflexivity.
 Qed.
 
@@ -791,7 +818,7 @@ Proof.
 
   (* 2^1-1 = 1 *)
 
-  replace (f x) with (applyn (sub (dec1pow 1)) f x); auto.
+  replace (f x) with (applyn (pow 2 1 - 1) f x); auto.
   (* We can now apply the long, main lemma we proved above. *)
   rewrite mainLemma.
   (* Some simple arithmetic proves the required equality for the application of mainLemma *)
@@ -837,8 +864,6 @@ Proof.
   rewrite odUnfold. apply help.
 Qed.
 
-Check odeq.
-
 CoFixpoint iterateSlow F (x:A) : Braun :=
   let g := fun z => F (F z) in
     let y := F x in
@@ -871,54 +896,73 @@ Qed.
 *)
 
 Lemma iterSlow :
-  let P b := forall f x, bat (iterateSlow f x) b = applyn (ord b) f x
+  let P b := forall f x, aext f f -> Aeq (bat (iterateSlow f x) b) (applyn (ord b) f x)
     in forall b, P b.
 Proof.
   intro P.
   induction b.
   unfold P; intros; auto.
-  destruct a; unfold P; intros.
+  simpl. reflexivity.
+  destruct a; unfold P in *; intros.
   transitivity (bat (iterateSlow (fun z => f (f z)) (f x)) b).
-  simpl. auto.
+  simpl. reflexivity.
   rewrite IHb.
   simpl ord.
   transitivity (applyn (ord b) (applyn 2 f) (f x)).
-  simpl. auto.
+  simpl. reflexivity.
   rewrite applyMul.
   repeat (rewrite <- mult_n_Sm).
   rewrite <- mult_n_O.
   simpl.
   transitivity (applyn (ord b + ord b) f (applyn 1 f x)).
-  auto.
-  rewrite applyAdd. auto.
+  reflexivity.
+  rewrite applyAdd.
   transitivity (applyn 1 f (applyn (ord b + ord b) f x)).
-  rewrite applyAdd. f_equal. auto with arith.
-  simpl. repeat f_equal. auto.
+  rewrite applyAdd. apply applynMorph. auto with arith.
+  
+  simpl. assumption. reflexivity. simpl.
+  apply H. apply applynMorph. auto. assumption. reflexivity.
+  unfold aext in *.
+  intros.
+  apply H. apply H. assumption.
+
   simpl.
   rewrite IHb.
   transitivity (applyn (ord b) (applyn 2 f) (f (f x))).
-  simpl. auto.
+  simpl. reflexivity.
   rewrite applyMul.
   repeat (rewrite <- mult_n_Sm).
   rewrite <- mult_n_O.
   simpl.
   transitivity (applyn (ord b + ord b) f (applyn 2 f x)).
-  auto.
-  rewrite applyAdd. auto.
+  reflexivity.
+  rewrite applyAdd. 
   transitivity (applyn 2 f (applyn (ord b + ord b) f x)).
-  rewrite applyAdd. f_equal. auto with arith.
-  simpl. repeat f_equal. auto.
+  rewrite applyAdd. apply applynMorph. auto with arith.
+  assumption. reflexivity.
+  simpl. repeat (apply H). apply applynMorph. auto.
+  assumption.
+  reflexivity.
+  unfold aext in *; intros.
+  apply H; apply H; assumption.
 Qed.
 
 Lemma iterSame :
-  forall f x, coeq (iterateSlow f x) (iterate f x).
+  forall f x, aext f f -> coeq (iterateSlow f x) (iterate f x).
 Proof.
   intros.
   apply batcoeq.
   intros.
-  rewrite iter.
-  rewrite iterSlow.
-  reflexivity.
+  transitivity (applyn (ord b) f x).
+  Check iterSlow.
+  pose iterSlow as p.
+  simpl in p.
+  apply p. assumption.
+  pose iter as p.
+  simpl in p.
+  symmetry.
+  apply p.
+  assumption.
 Qed.
 
 End type.
