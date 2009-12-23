@@ -163,7 +163,7 @@ End Double.
 
 Hint Unfold exteq.
 
-(* unco converts the usual braun streams to their functional dopplegangers, fraun *)
+(* braunFraun converts Braun streams to their functional dopplegangers, Frauns *)
 
 Fixpoint braunFraun (x : braun) (n : list bool) {struct n} : a :=
 match x with
@@ -174,8 +174,6 @@ match x with
     | false::r => braunFraun ev r
   end
 end.
-
-(*Require Import Coq.Program.Equality.*)
 
 Ltac des :=
   intros; simpl in *;
@@ -188,7 +186,7 @@ Ltac des :=
     | _ => auto
   end.
 
-(* braunFraun turns bisimilar braun streams into extensionally equal fraun functions *)
+(* braunFraun turns bisimilar Braun streams into extensionally equal frauns *)
 
 Add Parametric Morphism : braunFraun with
   signature coeq ==> (@exteq (list bool) (@eq (list bool))) as braunFraunMorph.
@@ -198,7 +196,7 @@ Proof.
   unfold exteq. intros. subst. auto.
 Qed.
 
-(* fraunBraun undoes the conversion, turning fraun functions into braun streams *)
+(* fraunBraun undoes the conversion, turning frauns into Braun streams *)
 
 CoFixpoint fraunBraun (x : fraun) : braun :=
 bons (x nil) (fraunBraun (fun y => x (cons true y)))
@@ -231,7 +229,6 @@ Proof.
   subst; auto.
 Qed.
   
-
 Add Parametric Morphism : fraunBraun with
   signature (@exteq (list bool) (@eq (list bool))) ==> coeq 
   as fraunBraunMorph.
@@ -239,8 +236,8 @@ Proof.
   unfold exteq, opaque.
   cofix.
   intros x y xy.
-  rewrite (frobeq (fraunBraun x)).
-  rewrite (frobeq (fraunBraun y)).
+  rewrite (frobeq (_ x)).
+  rewrite (frobeq (_ y)).
   simpl.
   constructor.
   apply xy; try (apply opaqueEq; apply aeqEquiv); reflexivity.
@@ -251,8 +248,6 @@ Proof.
 Qed.
 
 (* braunFraun and fraunBraun are inverses: *)
-
-Print exteq.
 
 Lemma fraunBack : forall x y, exteq eq x y -> exteq eq (braunFraun (fraunBraun x)) y.
 Proof.
@@ -344,42 +339,6 @@ Require Import Coq.omega.Omega.
 
 
 Require Import Arith.
-
-(* succT n is one more than n *)
-
-Fixpoint succT (n:list bool) : list bool :=
-match n with
-| nil => true :: nil
-| true ::r => false::r
-| false::r => true::(succT r)
-end.
-
-
-Lemma succTisS : forall n, ord (succT n) = S (ord n).
-Proof.
-  induction n; des. omega.
-Defined.
-
-Hint Rewrite succTisS : bord.
-
-Ltac num :=
-  des; autorewrite with bord in *; try omega; auto.
-
-(* twiceT n is 2*n *)
-
-Fixpoint twiceT (n:list bool) : list bool :=
-match n with
-| nil => nil
-| true::r => false::(twiceT r)
-| false::r => false::(succT (twiceT r))
-end.
-
-Lemma twice : forall n, ord (twiceT n) = 2*(ord n).
-Proof.
-  induction n; num.
-Qed. 
-
-Hint Rewrite twice : bord.
 
 Fixpoint evenp (n:nat) : nat+nat :=
   match n with
@@ -596,6 +555,43 @@ Proof.
   omega.
 Qed.
 
+
+(* succT n is one more than n *)
+
+Fixpoint succT (n:list bool) : list bool :=
+match n with
+| nil => true :: nil
+| true ::r => false::r
+| false::r => true::(succT r)
+end.
+
+
+Lemma succTisS : forall n, ord (succT n) = S (ord n).
+Proof.
+  induction n; des. omega.
+Defined.
+
+Hint Rewrite succTisS : bord.
+
+Ltac num :=
+  des; autorewrite with bord in *; try omega; auto.
+
+(* twiceT n is 2*n *)
+
+Fixpoint twiceT (n:list bool) : list bool :=
+match n with
+| nil => nil
+| true::r => false::(twiceT r)
+| false::r => false::(succT (twiceT r))
+end.
+
+Lemma twice : forall n, ord (twiceT n) = 2*(ord n).
+Proof.
+  induction n; num.
+Qed. 
+
+Hint Rewrite twice : bord.
+
 Definition predT (n:list bool) : list bool :=
   match n with 
     | nil => nil
@@ -616,25 +612,6 @@ Proof.
 Qed.
 
 Hint Rewrite succPred : bord.
-  
-(* using the selectors defined above, the type of odds is 
-Br n -> Br (oddsT n)
-and the type of evens if
-Br n -> Br (evensT n)
-*)
-
-Definition oddsT (n:list bool) : list bool :=
-match n with
-| nil => nil
-| true ::r => r
-| false::r => succT r
-end.
-
-Definition evensT (n:list bool) : list bool :=
-match n with
-| nil => nil
-| p::q => q
-end.
 
 (*
 
