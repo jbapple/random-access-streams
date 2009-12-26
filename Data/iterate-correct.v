@@ -224,9 +224,11 @@ oddFromEven f (f^(2^k-1) x) even = iterate f^(2^k) (f^(2^k-1) x)
 
 *)
 
+
+
 Lemma mainLemma :
   forall b e x f k,
-    exteq f f ->
+(*    exteq f f -> *)
     opaque aeq aeq f ->
     (forall j, ord j < ord b ->
       aeq (bat e j)
@@ -242,7 +244,7 @@ Proof.
 
   (* We prove this by induction on b. *)
 
-  induction b; destruct e as [hd odd even]; intros.
+  induction b; destruct e as [hd odd even]; intros; unfold opaque in *.
 
   (* The nil case is trivial. *)
 
@@ -266,6 +268,11 @@ Proof.
 
   (* For the odd branch *)
 
+
+  assert (exteq f f) as E.
+  unfold exteq; unfold BraunStreams.exteq.
+  intros; apply X; auto.
+
   transitivity
     (bat (oddFromEven f (applyn (pow 2 (S k) - 1) f x) even) b); auto.
   transitivity 
@@ -274,18 +281,18 @@ Proof.
   fold (applyn (pow 2 (S k) - 2) f x).
   Check batMorph.
   apply batMorph with (aeq := aeq).
-  apply oddFromMorph.
-  assumption. apply H.
+  apply oddFromMorph; auto.
   assert (forall k, S k = k + 1) as sk.
   intros; omega.
-  rewrite <- sk in H0.  
-  apply H0 with (j := nil).
-  simpl; omega. assumption. assumption. reflexivity. reflexivity.
+  rewrite <- sk in H.  
+  apply X.
+  apply H with (j := nil).
+  simpl; omega. reflexivity. auto.
   apply batMorph with (aeq := aeq).
   apply oddFromMorph.
-  assumption.
-  pose applynMorph as anmh.
-  unfold exteq in anmh; unfold BraunStreams.exteq in anmh.
+  unfold exteq; unfold BraunStreams.exteq.
+  intros; apply X; auto.
+  apply applynMorph; auto.
   Lemma helppow : forall k, S (pow 2 (S k) - 2) = pow 2 (S k) - 1.
   Proof.
     clear.
@@ -296,20 +303,18 @@ Proof.
     omega.
   Qed.
   Show.
-  rewrite helppow.
-  eapply anmh.
-  assumption. assumption. 
-  assumption.
-  reflexivity. 
+  rewrite helppow; auto.
   reflexivity.
-  apply applynOpaque. assumption.
-  apply applynOpaque. assumption.
-  reflexivity. reflexivity.
+  apply applynOpaque; auto.
+  apply applynOpaque; auto.
+  reflexivity.
+  auto.
 
   rewrite IHb.
 
   autorewrite with arith.
   apply applynMorph; auto.
+
   unfold pow; fold (pow 2 k).
   simpl.
   repeat (rewrite mult_plus_distr_r).
@@ -317,14 +322,15 @@ Proof.
   omega; auto.  reflexivity. 
   apply applynOpaque; auto.
   apply applynOpaque; auto.
-  auto. auto.
+  auto. 
 
   intros.
   transitivity (bat (bons hd odd even) (false::j)); auto.
   unfold bat at 2. fold (bat even j). reflexivity.
-  rewrite H0.
+  rewrite H.
   autorewrite with arith.
   apply applynMorph; try reflexivity; auto.
+  
   unfold ord; fold (ord j). simpl.
   assert (forall k, S k = k + 1) as sk.
   intros; omega.
@@ -341,20 +347,25 @@ Proof.
   unfold ord; fold (ord j); fold (ord b).
   omega.
 
+  
+  assert (exteq f f) as E.
+  unfold exteq; unfold BraunStreams.exteq.
+  intros; apply X; auto.
+
   rewrite fmapbat.
 
   transitivity (applyn 1 f (bat (bons hd odd even) (true::b))); auto.
-  unfold applyn. apply H. auto.
+  unfold applyn. apply X; auto.
   unfold bat at 2; fold (bat odd b).
-  reflexivity. auto. auto.
+  reflexivity.
 
   transitivity (applyn 1 f ((applyn (ord (true::b)) (applyn (pow 2 k) f) (applyn (pow 2 (S k) - 2) f x)))).
   apply applynMorph; try reflexivity; try assumption; auto.
   assert (forall k, S k = k + 1) as sk.
   intros; omega.
-  rewrite <- sk in H0.
+  rewrite <- sk in H.
 
-  apply H0. unfold ord; fold (ord b); omega.
+  apply H. unfold ord; fold (ord b); omega.
 
   autorewrite with arith.
   apply applynMorph; try reflexivity; try (apply applynMorph); auto.
@@ -391,7 +402,7 @@ Proof.
   unfold P in *.
   intros.
   (* If b is the head element, the proof is trivial. Otherwise, name the head of b "a" and the tail of b "b" *)
-  destruct b as [|a b]; auto.
+  destruct b as [|z b]; auto.
   simpl. reflexivity.
 
   (*
