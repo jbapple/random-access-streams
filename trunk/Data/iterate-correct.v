@@ -19,6 +19,7 @@ Require Import BraunStreams.
 Definition braun := braun a.
 Definition coeq := coeq aeq.
 Definition exteq := @exteq a aeq a aeq.
+Definition opaque := @opaque a a aeq aeq.
 
 Variable oddFromEven : (a->a) -> a -> braun -> braun.
 Variable oddFromUnfold :
@@ -122,10 +123,10 @@ Fixpoint applyn (n:nat) (f:a->a) (x:a) : a :=
 
 Lemma applynOpaque :
   forall n f, 
-    opaque aeq aeq f -> 
-    opaque aeq aeq (applyn n f).
+    opaque f -> 
+    opaque (applyn n f).
 Proof.
-  unfold opaque; induction n; simpl; intros.
+  unfold opaque; unfold BraunStreams.opaque; induction n; simpl; intros.
   assumption.
   apply H; apply IHn.
   assumption. assumption.
@@ -133,8 +134,8 @@ Qed.
 
 Lemma applynMorph :
   forall n m f g,
-    opaque aeq aeq f ->
-    opaque aeq aeq g ->
+    opaque f ->
+    opaque g ->
     exteq f g ->
     n = m ->
     exteq (applyn n f) (applyn m g).
@@ -229,7 +230,7 @@ oddFromEven f (f^(2^k-1) x) even = iterate f^(2^k) (f^(2^k-1) x)
 Lemma mainLemma :
   forall b e x f k,
 (*    exteq f f -> *)
-    opaque aeq aeq f ->
+    opaque f ->
     (forall j, ord j < ord b ->
       aeq (bat e j)
       (applyn (ord j)
@@ -244,7 +245,8 @@ Proof.
 
   (* We prove this by induction on b. *)
 
-  induction b; destruct e as [hd odd even]; intros; unfold opaque in *.
+  induction b; destruct e as [hd odd even]; intros; unfold opaque in *;
+    unfold BraunStreams.opaque in *.
 
   (* The nil case is trivial. *)
 
@@ -391,7 +393,7 @@ Proof.
 Qed.
 
 Lemma iter :
-  let P b := forall f x, exteq f f -> aeq (bat (iterate f x) b) (applyn (ord b) f x)
+  let P b := forall f x, opaque f -> aeq (bat (iterate f x) b) (applyn (ord b) f x)
     in forall b, P b.
 Proof.
   intro P.
@@ -400,7 +402,13 @@ Proof.
   eapply (well_founded_ind bwf).
   intros b IH.
   unfold P in *.
+  unfold opaque in *; unfold BraunStreams.opaque in *.
   intros.
+
+  assert (exteq f f) as E.
+  unfold exteq; unfold BraunStreams.exteq.
+  intros; apply X; auto.
+
   (* If b is the head element, the proof is trivial. Otherwise, name the head of b "a" and the tail of b "b" *)
   destruct b as [|z b]; auto.
   simpl. reflexivity.
@@ -422,8 +430,13 @@ Proof.
   (* Some simple arithmetic proves the required equality for the application of mainLemma *)
   transitivity (applyn 1 f (applyn (ord b + (ord b + 0)) f x)); auto.
   repeat (repeat (rewrite applyMul); repeat (rewrite applyAdd)).
-  apply applynMorph. simpl; omega. assumption.  reflexivity.
-  reflexivity. assumption.
+  apply applynMorph; auto; simpl. 
+  omega. 
+  reflexivity.
+  apply applynOpaque; auto; simpl.
+  unfold BraunStreams.opaque; intros. apply H.
+  apply applynOpaque; auto.
+  reflexivity. auto.
 
   (* For the condition on mainLemma, first change the sequence we bat to iterate f x, rather than ev f x *)
   intros.
@@ -434,13 +447,15 @@ Proof.
   rewrite IH.
   (* The equality now follows with some arithmetic *)
   repeat (rewrite applyMul); repeat (rewrite applyAdd).
-  apply applynMorph.
-  unfold ord; fold (ord j). simpl; omega. assumption. reflexivity.
+  apply applynMorph; auto.
+  unfold ord; fold (ord j). simpl; omega. reflexivity.
+  apply applynOpaque; auto.
+  apply applynOpaque; auto.
 
   (* The condition of the induction hypothesis follows by arithemtic and a simple case analysis on b and j *)
 
   unfold bacc; unfold ord; fold (ord b); fold (ord j). 
-  destruct a; omega. assumption.
+  destruct z; omega. assumption.
 
   (*
      End proof of helper lemma.
@@ -448,18 +463,28 @@ Proof.
 
   (* Now a is either true or false, corresponding to either the odd or the even branch, respectively. *)
 
-  destruct a; simpl.
+  destruct z; simpl.
+  transitivity (bat (oddFromEven f (f x) (ev f x)) b).
+  apply batMorph with (aeq := aeq); auto.
+  apply odUnfold; auto.
+
   (* In the odd branch, once we unfold odd, we can apply the helper lemma. *)
 
-  rewrite odUnfold; apply help.
+  apply help.
+  transitivity (bat (fmap f (od f x)) b).
+  apply batMorph with (aeq := aeq); auto.
+  apply evUnfold; auto.
 
   (* We will transform the even branch into an instance of the odd branch. ev unfolds to fmap od. *) 
-  rewrite evUnfold.
+
   (* The commutator of bat and fmap f is f *)
   rewrite fmapbat. apply H.
 
   (* Now this is just the odd case from above *)
-  rewrite odUnfold. apply help.
+  transitivity (bat (oddFromEven f (f x) (ev f x)) b).
+  apply batMorph with (aeq := aeq); auto.
+  apply odUnfold; auto.
+  apply help.
 Qed.
 
 CoFixpoint iterateSlow f (x:a) : braun :=
@@ -469,14 +494,22 @@ CoFixpoint iterateSlow f (x:a) : braun :=
              (iterateSlow g (f y)).
 
 Lemma iterSlow :
-  let P b := forall f x, exteq f f -> aeq (bat (iterateSlow f x) b) (applyn (ord b) f x)
+  let P b := forall f x, opaque f -> aeq (bat (iterateSlow f x) b) (applyn (ord b) f x)
     in forall b, P b.
 Proof.
   intro P.
-  induction b.
+  induction b as [|q b].
   unfold P; intros; auto.
   simpl. reflexivity.
-  destruct a; unfold P in *; intros.
+
+
+
+  destruct q; unfold P in *; intros.
+
+  assert (exteq f f) as E.
+  unfold exteq; unfold BraunStreams.exteq.
+  intros; apply X; auto.
+
   transitivity (bat (iterateSlow (fun z => f (f z)) (f x)) b).
   simpl. reflexivity.
   rewrite IHb.
@@ -493,11 +526,21 @@ Proof.
   transitivity (applyn 1 f (applyn (ord b + ord b) f x)).
   rewrite applyAdd. apply applynMorph. auto with arith.
   
-  simpl. assumption. reflexivity. simpl.
-  apply H. apply applynMorph. auto. assumption. reflexivity.
-  unfold exteq in *.
-  intros.
-  apply H. apply H. assumption.
+  simpl. auto. auto. auto with arith. reflexivity.
+  apply applynOpaque; auto.
+  apply applynOpaque; auto.
+  simpl.
+  apply X; auto. 
+  apply applynMorph; auto.
+  reflexivity.
+  apply applynOpaque; auto.
+  apply applynOpaque; auto.
+  unfold opaque in *; unfold BraunStreams.opaque in *.
+  intros; repeat (apply X; auto).
+
+  assert (exteq f f) as E.
+  unfold exteq; unfold BraunStreams.exteq.
+  intros; apply X; auto.
 
   simpl.
   rewrite IHb.
@@ -511,20 +554,23 @@ Proof.
   reflexivity.
   rewrite applyAdd. 
   transitivity (applyn 2 f (applyn (ord b + ord b) f x)).
-  rewrite applyAdd. apply applynMorph. auto with arith.
-  assumption. reflexivity.
-  simpl. repeat (apply H). apply applynMorph. auto.
-  assumption.
+  rewrite applyAdd. apply applynMorph; auto. auto with arith.
+  reflexivity. 
+  apply applynOpaque; auto.
+  apply applynOpaque; auto.
+  simpl. repeat (apply X). apply applynMorph; auto.
   reflexivity.
-  unfold exteq in *; intros.
-  apply H; apply H; assumption.
+  apply applynOpaque; auto.
+  apply applynOpaque; auto.
+  unfold opaque in *; unfold BraunStreams.opaque in *.
+  intros; repeat (apply X; auto).
 Qed.
 
 Lemma iterSame :
-  forall f x, exteq f f -> coeq (iterateSlow f x) (iterate f x).
+  forall f x, opaque f -> coeq (iterateSlow f x) (iterate f x).
 Proof.
   intros.
-  apply batcoeq.
+  apply batCoeq.
   intros.
   transitivity (applyn (ord b) f x).
   Check iterSlow.
