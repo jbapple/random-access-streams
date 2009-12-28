@@ -91,8 +91,12 @@ Definition Braun' := list bool -> A.
 Section Double.
 
 Variable (B:Set).
-
-Definition exteq (f:B -> A) (g:B -> A) := forall x, Aeq (f x) (g x).
+(*
+Variable (Beq : relation B).
+Variable (Beq_equiv : Equivalence Beq).
+*)
+Definition exteq (f:B -> A) (g:B -> A) := 
+  forall x, Aeq (f x) (g x).
 
 Hint Unfold exteq.
 
@@ -547,18 +551,6 @@ Proof.
   omega.
 Qed.
 
-Lemma bOrdInjective :
-  forall x y, bOrd x = bOrd y -> x = y.
-Proof.
-  intros x; induction x.
-  simpl; destruct y as [|a z]; auto; destruct a; simpl;
-    intros H; inversion H.
-  induction y; simpl.
-  destruct a; intros H; inversion H.
-  destruct a; destruct a0; simpl; intros H.
-  f_equal; apply IHx. omega.
-Abort.
-
 Definition predT (n:list bool) : list bool :=
   match n with 
     | nil => nil
@@ -740,6 +732,9 @@ Next Obligation.
   num.
 Defined.
 
+Print oddFromEvenPr'.
+Print oddFromEvenPr'_obligation_2.
+
 (*
 
 From the FAQ:
@@ -853,6 +848,9 @@ intros x n b p.
 apply x.
 apply b.
 Defined.
+
+Print fromPrime.
+Print toPrime.
 
 Lemma toFromPrime :
   forall (x:(forall n, Br n)),
