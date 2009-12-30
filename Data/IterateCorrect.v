@@ -3,10 +3,10 @@ Set Implicit Arguments.
 Require Import Setoid.
 Require Import List.
 Require Import Coq.Init.Wf.
-Require Import Coq.Program.Wf.
+(*Require Import Coq.Program.Wf.*)
 Require Import Coq.Arith.Wf_nat.
 Require Import Coq.omega.Omega.
-Require Import Coq.Program.Equality.
+(*Require Import Coq.Program.Equality.*)
 
 Section type.
 

@@ -17,6 +17,7 @@ iterate f x =
 *)
 Require Import List.
 Require Import Setoid.
+Require Import BraunStreams.
 
 Set Implicit Arguments.
 (*Set Contextual Implicit.*)
@@ -25,64 +26,17 @@ Set Implicit Arguments.
 
 Section Single.
 
-Variable (A : Set).
-Variable (Aeq : relation A).
-Variable (Aeq_equiv : Equivalence Aeq).
-Variable F : A -> A.
-Variable F_morph : forall x y, Aeq x y -> Aeq (F x) (F y).
+Variable (a : Set).
+Variable (aeq : relation a).
+Variable (aeqEquiv : Equivalence aeq).
 
-CoInductive Braun : Set :=
-| Cons : A -> Braun -> Braun -> Braun.
+Definition braun := braun a.
+Definition coeq := coeq aeq.
+Definition exteq := @exteq a aeq a aeq.
+Definition opaque := @opaque a a aeq aeq.
 
-(* Bisimilarity is the equivalence relation we will want on Braun streams *)
-
-CoInductive coeq : Braun -> Braun -> Prop :=
-| co : forall x y od od' ev ev', 
-        Aeq x y -> coeq od od' -> coeq ev ev' 
-        -> coeq (Cons x od ev) (Cons y od' ev').
-
-Lemma coeq_refl : forall x, coeq x x.
-Proof.
-  cofix.
-  destruct x. 
-  constructor.
-  setoid_reflexivity.
-  apply coeq_refl.
-  apply coeq_refl.
-Qed.
-
-Lemma coeq_symm : forall x y, coeq x y -> coeq y x.
-Proof.
-  cofix.
-  intros x y coeq_x_y.
-  destruct coeq_x_y.
-  constructor. 
-  setoid_symmetry. assumption.
-  apply coeq_symm. assumption.
-  apply coeq_symm. assumption.
-Qed.
-
-Lemma coeq_trans : forall x y z , coeq x y -> coeq y z -> coeq x z.
-Proof.
-  cofix.
-  intros x y z coeq_x_y coeq_y_z.
-  inversion coeq_x_y as [xh  yh xod  yod xev  yev].
-  inversion coeq_y_z as [yh' zh yod' zod yev' zev yzh yzod yzev yy].
-  subst.
-  inversion yy. subst. clear yy.
-  constructor.
-  setoid_transitivity yh; assumption.
-  apply coeq_trans with yod; assumption.
-  apply coeq_trans with yev; assumption.
-Qed.
-
-Add Parametric Relation : Braun coeq
-reflexivity proved by coeq_refl
-symmetry proved by coeq_symm
-transitivity proved by coeq_trans
-as coeq_equiv.
-
-(* An equivalent definition of Braun streams: *)
+Variable f : a -> a.
+Variable fOpaque : opaque f.
 
 Definition Braun' := list bool -> A.
 
@@ -96,7 +50,7 @@ Variable (Beq : relation B).
 Variable (Beq_equiv : Equivalence Beq).
 *)
 Definition exteq (f:B -> A) (g:B -> A) := 
-  forall x, Aeq (f x) (g x).
+  forall x, aeq (f x) (g x).
 
 Hint Unfold exteq.
 
@@ -153,7 +107,7 @@ Ltac des :=
 Add Parametric Morphism : unco with
   signature coeq ==> (@exteq (list bool)) as unco_mor.
 Proof.
-  assert (forall n x y, coeq x y -> Aeq (unco x n) (unco y n)).
+  assert (forall n x y, coeq x y -> aeq (unco x n) (unco y n)).
   induction n; des.
   auto.
 Qed.
@@ -198,7 +152,7 @@ Qed.
 
 Lemma unre : forall x y, exteq x y -> exteq (unco (reco x)) y.
 Proof.
-  assert (forall n x y, exteq x y -> Aeq (unco (reco x) n) (y n)).
+  assert (forall n x y, exteq x y -> aeq (unco (reco x) n) (y n)).
   induction n; des.
   apply IHn with (y := fun z => y (true::z)). des.
   apply IHn with (y := fun z => y (false::z)). des.
@@ -854,10 +808,10 @@ Print toPrime.
 
 Lemma toFromPrime :
   forall (x:(forall n, Br n)),
-    (forall n n' b p q, Aeq (x n b p) (x n' b q)) ->
+    (forall n n' b p q, aeq (x n b p) (x n' b q)) ->
     let y := fromPrime (toPrime x) in
       forall n n' b p q,
-        Aeq (x n b p) (y n' b q).
+        aeq (x n b p) (y n' b q).
 Proof.
   intros.
   unfold toPrime in y.
@@ -871,7 +825,7 @@ Lemma fromToPrime :
   forall x:Braun',
     let y := toPrime (fromPrime x) in
       forall n,
-        Aeq (x n) (y n).
+        aeq (x n) (y n).
 Proof.
   intros.
   unfold y; unfold fromPrime; unfold toPrime.
@@ -968,7 +922,7 @@ Definition oddFromP (x:A) (v:
 *)
 (*
 Definition invariant (x:forall n, Br n) := 
-  forall b, (forall n p n' p', Aeq (x n b p) (x n' b p')).
+  forall b, (forall n p n' p', aeq (x n b p) (x n' b p')).
 
 Check evensR.
 
@@ -980,8 +934,8 @@ Check evensR.
 
 Lemma evensRinvariant: 
   forall n n' (x:Br n) (x':Br n'), 
-    (forall z s t, Aeq (x z s) (x' z t)) ->
-    forall m p p', Aeq (@evensR n x m p) (@evensR n' x' m p').
+    (forall z s t, aeq (x z s) (x' z t)) ->
+    forall m p p', aeq (@evensR n x m p) (@evensR n' x' m p').
 Proof.
   intros.
   unfold evensR in *.
@@ -990,8 +944,8 @@ Defined.
 
 Lemma oddsRinvariant: 
   forall n n' (x:Br n) (x':Br n'), 
-    (forall z s t, Aeq (x z s) (x' z t)) ->
-    forall m p p', Aeq (@oddsR n x m p) (@oddsR n' x' m p').
+    (forall z s t, aeq (x z s) (x' z t)) ->
+    forall m p p', aeq (@oddsR n x m p) (@oddsR n' x' m p').
 Proof.
   intros.
   unfold oddsR in *.
@@ -999,9 +953,9 @@ Proof.
 Defined.
 
 Lemma oddFrom_morph :
-  forall x y, Aeq x y -> 
+  forall x y, aeq x y -> 
     forall n p q r, 
-      Aeq (@oddFromEvenPr' x n p q r)
+      aeq (@oddFromEvenPr' x n p q r)
       (@oddFromEvenPr' y n p q r).
 Proof.
   intros.
@@ -1013,9 +967,9 @@ Qed.
 
 Lemma oddFromInvariant : 
   forall n n' (x:Br n) (x':Br n'), 
-    (forall z s t, Aeq (x z s) (x' z t)) ->
+    (forall z s t, aeq (x z s) (x' z t)) ->
     forall v  b p p', 
-      Aeq (@oddFromEvenPr' v n x b p)
+      aeq (@oddFromEvenPr' v n x b p)
       (@oddFromEvenPr' v n' x' b p').
 Proof.
   intros.
@@ -1064,8 +1018,8 @@ Program Definition fmapR (n:list bool) (x:Br n) : Br n :=
 
 Lemma fmapInvariant: 
   forall n n' (x:Br n) (x':Br n'), 
-    (forall z s t, Aeq (x z s) (x' z t)) ->
-    forall m p p', Aeq (@fmapR n x m p) (@fmapR n' x' m p').
+    (forall z s t, aeq (x z s) (x' z t)) ->
+    forall m p p', aeq (@fmapR n x m p) (@fmapR n' x' m p').
 Proof.
   intros.
   unfold fmapR in *.
@@ -1074,7 +1028,7 @@ Qed.
 
 
 Lemma oddFromUnfold : forall x e b,
-  Aeq (oddFrom x e b)
+  aeq (oddFrom x e b)
   (match b with
      | nil => x
      | true :: r => @oddFrom (F (e nil)) (even' e) r
@@ -1125,7 +1079,7 @@ Qed.
 
 Lemma allEq :
   forall x y,
-    (forall b, Aeq (unco x b) (unco y b)) ->
+    (forall b, aeq (unco x b) (unco y b)) ->
     coeq x y.
 Proof.
   cofix.
@@ -1145,7 +1099,7 @@ Qed.
 
 
 Add Parametric Morphism : oddFrom with
-  signature Aeq ==> (@exteq (list bool)) ==> (@eq (list bool)) ==> Aeq as oddFrom_mor.
+  signature aeq ==> (@exteq (list bool)) ==> (@eq (list bool)) ==> aeq as oddFrom_mor.
 Proof.
   intros.
   generalize dependent x;
@@ -1289,7 +1243,7 @@ Axiom proofIrrel : forall (P:Prop) (p q:P), p = q.
 Lemma oddRoddFrom : 
   forall X n b p, 
     exists q,
-      Aeq 
+      aeq 
       (@oddR X n b p)
       (@oddFromEvenPr (F X) _ (evenR' (@oddR X b)) b q).
 Proof.
@@ -1354,7 +1308,7 @@ Require Import Coq.Arith.Wf_nat.
 
 Lemma oddRInvariant : 
   forall X n n' b p q, 
-    Aeq (@oddR X n b p)
+    aeq (@oddR X n b p)
         (@oddR X n' b q).
 Proof.
   Check (@well_founded_ind nat lt lt_wf).
@@ -1368,24 +1322,24 @@ Proof.
   pose (fun (nn : nat) => forall (X : A) (n' n : list bool),
    nn = bOrd n ->
    forall (b : list bool) (p : bOrd b < bOrd n) (q : bOrd b < bOrd n'),
-   Aeq (oddR X n b p) (oddR X n' b q)) as P.
+   aeq (oddR X n b p) (oddR X n' b q)) as P.
   apply (@well_founded_ind nat lt lt_wf P).
   unfold P in *; clear P.
   intros.
   assert (exists r,
-    Aeq 
+    aeq 
     (@oddR X n b p)
     (@oddFromEvenPr (F X) _ (evenR' (@oddR X b)) b r)) as J.
   apply oddRoddFrom.
   destruct J.
   assert (exists s,
-    Aeq 
+    aeq 
     (@oddR X n' b q)
     (@oddFromEvenPr (F X) _ (evenR' (@oddR X b)) b s)) as I.
   apply oddRoddFrom.
   destruct I.
   eapply Equivalence_Symmetric in H2.
-  assert (Aeq 
+  assert (aeq 
     (oddFromEvenPr (F X) (evenR' (oddR X b)) b x0)
     (oddFromEvenPr (F X) (evenR' (oddR X b)) b x1)).
   apply oddFromInvariant.
