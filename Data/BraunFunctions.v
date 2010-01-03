@@ -1,4 +1,4 @@
-Require Import BraunStreams.
+Require Export BraunStreams.
 Require Import List.
 Require Import Setoid.
 
@@ -37,9 +37,9 @@ end.
 
 
 Ltac des :=
-  intros; simpl in *;
+  intros; simpl in *; try reflexivity;
   match goal with
-    | [H:Equivalence ?S |- _] => inversion_clear H; auto; des
+(*    | [H:Equivalence ?S |- _] => inversion_clear H; auto; des*)
     | [a:bool |- _] => destruct a; auto; des
     | [ |- coeq (bons _ _ _) (bons _ _ _)] => constructor; auto; des
     | [_:_=_ |- _] => subst; auto
@@ -92,10 +92,11 @@ Proof.
   assert (forall n x y, exteq aeq eq x y -> aeq (braunFraun (fraunBraun x) n) (y n)).
   unfold exteq, opaque.
   induction n; des. apply H; auto; intros; des.  
+  reflexivity. reflexivity.
   apply IHn with (y := fun z => y (true::z)); des.
-  apply H; auto; intros; des.
+  apply H; auto; intros; des; try reflexivity.
   apply IHn with (y := fun z => y (false::z)). des.
-  apply H; auto; intros; des.
+  apply H; auto; intros; des; try reflexivity.
   des.
 Qed.
 
@@ -164,7 +165,13 @@ end.
 
 Lemma succTisS : forall n, ord (succT n) = S (ord n).
 Proof.
-  induction n; des. omega.
+  induction n. 
+  simpl. reflexivity.
+  destruct a0.
+  simpl. reflexivity.
+  simpl. 
+  rewrite IHn.
+  omega.
 Defined.
 
 Hint Rewrite succTisS : bord.
@@ -253,11 +260,11 @@ Proof.
   rewrite (frobeq (fraunBraun f)).
   simpl.
   constructor.
-  apply H; des.
+  apply H; des; try reflexivity.
   eapply coext with (f := fun y => f (true:: y)) (g := fun y => g (true:: y)).
-  intros; subst. apply H; des.
+  intros; subst. apply H; des; try reflexivity.
   eapply coext with (f := fun y => f (false:: y)) (g := fun y => g (false:: y)).
-  intros; subst. apply H; des.
+  intros; subst. apply H; des; try reflexivity.
 Qed.
 
 Lemma fmapCommute : forall f x, coeq (fmap f (fraunBraun x)) (fraunBraun (ffmap f x)).
