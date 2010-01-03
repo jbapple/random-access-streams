@@ -24,10 +24,13 @@ Definition opaque := @opaque a a aeq aeq.
 Variable oddFromEven : (a->a) -> a -> braun -> braun.
 Variable oddFromUnfold :
   forall f x b,
+    opaque f ->
     coeq (oddFromEven f x b) 
     (bons x (oddFromEven f (f (bead b)) (bevens b)) (fmap f (bodds b))).
 Variable oddFromMorph :
   forall f g x y v w,
+    opaque f ->
+    opaque g ->
     exteq f g ->
     aeq x y ->
     coeq v w ->
@@ -54,8 +57,10 @@ Variable evMorph :
     coeq (ev f x) (ev g y).
     
 Variable odUnfold : forall f (x:a), 
+  opaque f ->
   coeq (od f x) (oddFromEven f (f x) (ev f x)).
 Variable evUnfold : forall f x,
+  opaque f ->
   coeq (ev f x) (fmap f (od f x)).
 
 Definition iterate f (x:a) : braun :=
@@ -252,7 +257,7 @@ Proof.
 
   rewrite batMorph.
   Focus 2.
-  apply oddFromUnfold.
+  apply oddFromUnfold. apply X.
   Focus 2. reflexivity.
   reflexivity.
 
@@ -294,6 +299,8 @@ Proof.
   apply oddFromMorph.
   unfold exteq; unfold BraunStreams.exteq.
   intros; apply X; auto.
+  intros; apply X; auto.
+  auto.
   apply applynMorph; auto.
   Lemma helppow : forall k, S (pow 2 (S k) - 2) = pow 2 (S k) - 1.
   Proof.
@@ -390,6 +397,7 @@ Proof.
   destruct km; simpl; omega. 
   apply applynOpaque; try reflexivity; try assumption; auto.
   apply applynOpaque; try reflexivity; try assumption; auto.
+apply X.
 Qed.
 
 Lemma iter :
