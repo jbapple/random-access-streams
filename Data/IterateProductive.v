@@ -16,7 +16,7 @@ iterate f x =
 
 *)
 Require Import List.
-Require Import Setoid.
+Require Export Setoid.
 Require Import BraunFunctions.
 
 Set Implicit Arguments.
@@ -1031,6 +1031,30 @@ Proof.
   apply exteqRefl.
   reflexivity.
 Qed.
+
+Lemma bevenUnfold :
+  forall f x, 
+    opaque f ->
+    coeq (beven f x)
+    (fmap f (bodd f x)).
+Proof.
+  unfold beven.
+  unfold evenR.
+  intros; apply batCoeq; auto. intros.
+  rewrite batFraun; auto.
+  unfold evenR'.
+  unfold toPrime.
+  unfold fmapR.
+  rewrite fmapbat.
+  apply X.
+  pose (@boddR f x b X) as bo.
+  destruct bo.
+  rewrite H.
+  apply oddRInvariant; auto.
+  unfold exteq; unfold BraunStreams.exteq; auto.
+  reflexivity.
+Qed.
+
 
 Require Import Recdef.
 
