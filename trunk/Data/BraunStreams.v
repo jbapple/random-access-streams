@@ -1,5 +1,5 @@
-Require Import List.
-Require Import Setoid.
+Require Export List.
+Require Export Setoid.
 
 Set Implicit Arguments.
 
