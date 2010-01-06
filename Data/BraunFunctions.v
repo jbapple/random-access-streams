@@ -281,4 +281,13 @@ Proof.
   apply fmapCommute.
 Qed.
 
+Lemma batFraun : forall b x, aeq (bat (fraunBraun x) b) (x b).
+Proof.
+  induction b as [|z b]; intros; simpl.
+  reflexivity.
+  destruct z; simpl.
+  erewrite (IHb (fun c => x (true :: c))). reflexivity.
+  erewrite (IHb (fun c => x (false :: c))). reflexivity.
+Qed.
+
 End Single.

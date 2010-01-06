@@ -174,7 +174,7 @@ unfold fraun.
 unfold Br.
 intros x l.
 apply (x (succT l) l).
-num.
+rewrite succTisS. omega.
 Defined.
 
 Definition fromPrime (x:fraun) : (forall n, Br n).
@@ -184,9 +184,6 @@ intros x n b p.
 apply x.
 apply b.
 Defined.
-
-Print fromPrime.
-Print toPrime.
 
 Lemma toFromPrime :
   forall (x:(forall n, Br n)),
@@ -214,6 +211,37 @@ Proof.
   apply Equivalence_Reflexive.
 Qed.
 
+Definition breq (x:forall n, Br n) (y:forall n, Br n) :=
+  forall n b p q,
+    aeq (x n b p)
+        (y n b q). 
+
+Lemma toPrimeMorph :
+  forall x y, breq x y -> fexteq (toPrime x) (toPrime y).
+Proof.
+  unfold fexteq.
+  unfold BraunStreams.exteq.
+  unfold breq.
+  unfold BraunStreams.opaque.
+  intros; subst.
+  unfold toPrime.
+  apply H.
+Qed.
+
+Lemma fromPrimeMorph :
+  forall x y, fexteq x y -> breq (fromPrime x) (fromPrime y).
+Proof.
+  unfold fexteq.
+  unfold BraunStreams.exteq.
+  unfold breq.
+  unfold BraunStreams.opaque.
+  intros; subst.
+  unfold fromPrime.
+  apply H; auto.
+  intros; subst. reflexivity.
+  intros; subst. reflexivity.
+Qed.
+
 Program Definition oddFrom f x e :=
   toPrime (fun n => 
     match n with 
@@ -239,6 +267,9 @@ Next Obligation.
   rewrite succPred.
   auto. auto.
 Qed.
+
+Check oddFromEvenPr.
+Check fromPrime.
 
 Definition oddFromEven f x e := fraunBraun (oddFrom f x (braunFraun e)).
 
@@ -327,6 +358,8 @@ Proof.
   erewrite oddFromEvenPrFalse with (i := i').
   apply fgeq; auto.
 Qed.
+
+
 
 Program Definition fmapR f (n:list bool) (x:Br n) : Br n :=
   fun b p => f (x b _).
@@ -466,6 +499,35 @@ Proof.
   apply opaqueEq; apply aeqEquiv.
 Qed.
 
+Lemma oddFromToPr :
+  forall f x e (m:list bool) n p,
+    opaque f ->
+    aeq (oddFrom f x e n)
+           (@oddFromEvenPr' f x m (@fromPrime e m) n p).
+Proof.
+  intros.
+  generalize dependent x;
+    generalize dependent e;
+      generalize dependent m.
+  induction n as [|z n]; intros.
+  simpl. unfold oddFrom. simpl. unfold toPrime. simpl. reflexivity.
+  destruct z.
+  rewrite oddFromUnfold; auto.
+  Check oddFromEvenPrTrue.
+  assert (ord nil < ord m) as i.
+  simpl.
+  simpl in p.
+  rewrite succTisS in p. omega.
+  assert (ord n < ord (succT (evensT m))) as j.
+  simpl in p.
+  rewrite succTisS in *.
+  destruct m as [|z m]; simpl; try (omega); destruct z; simpl in *; try (omega).
+  erewrite oddFromEvenPrTrue with (i := i) (j := j).
+  apply IHn.
+  rewrite oddFromUnfold; auto.
+  reflexivity.
+Qed.
+
 Lemma oddFromPlug :
   forall f (fOpaque: opaque f) x b,
     match b with
@@ -559,6 +621,24 @@ Lemma oddFromEvenInvariant :
       coeq (oddFromEven f v p)
            (oddFromEven g w q).
 Proof.
+  intros; unfold oddFromEven.
+  apply fraunBraunMorph; auto.
+  unfold BraunStreams.exteq.
+  intros.
+  subst.
+  apply oddFromMorph; auto.
+  apply braunFraunMorph; auto.
+Qed.
+  
+(*
+Lemma oddFromEvenInvariant : 
+  forall f g (fOpaque : opaque f) (gOpaque : opaque g)
+    (fgeq : exteq f g)    
+    v w (vw:aeq v w) 
+    p q (pq:coeq p q),
+      coeq (oddFromEven f v p)
+           (oddFromEven g w q).
+Proof.
 
   intros.
   apply batCoeq.
@@ -635,6 +715,7 @@ Proof.
     destruct ogwq; simpl.
   reflexivity.
 Qed.
+*)
 
 Definition evenR' f (n:list bool) (od:Br n) : Br n := fmapR f od.
 
@@ -671,10 +752,15 @@ Next Obligation.
   apply obl.
 Defined.
 
+Definition bodd f x := fraunBraun (toPrime (oddR f x)).
+
 (*
 Functional Scheme oddRsc := Induction for oddR Sort Prop.
 Error: Cannot define graph(s) for oddR
 *)
+  
+  
+    
 
 (*
 Axiom proofIrrel : forall (P:Prop) (p q:P), p = q.
@@ -802,7 +888,149 @@ Proof.
   auto.
 Qed.
 
+
+Lemma boddR :
+  forall f x b, 
+    opaque f ->
+    exists q,
+    aeq (bat (bodd f x) b)
+        (oddR f x (succT b) b q).
+Proof.
+  intros.
+  assert (ord b < ord (succT b)) as q.
+  rewrite succTisS. auto.
+  exists q.
+  unfold bodd.
+  rewrite batFraun; auto.
+  unfold toPrime.
+  apply oddRInvariant; auto.
+  unfold exteq; unfold BraunStreams.exteq; auto.
+  reflexivity.
+Qed.
+
 Definition evenR f X (n:list bool) : Br n := evenR' f (oddR f X n).
+
+Definition beven f x := fraunBraun (toPrime (evenR f x)).
+
+Check fraunBack.
+Print BraunStreams.exteq.
+Check evenR'.
+Check toPrime.
+Definition primeUp f o := toPrime (fun n => @evenR' f n (o n)).
+
+(*Lemma primeSame :=
+  forall nevenR' f n 
+*)
+
+Definition ropaque n (g:Br n) := 
+  forall b p q, aeq (g b p) (g b q).
+(*
+  forall (a -> a) -> forall n : list bool, Br n -> Br n
+
+forall x y : b,
+beq x y ->
+BraunStreams.opaque beq aeq f ->
+BraunStreams.opaque beq aeq g -> aeq (f x) (g y)
+     : forall a : Set,
+       relation a ->
+       forall b : Set, relation b -> (b -> a) -> (b -> a) -> Prop
+
+forall forall x : list bool, y, 
+       BraunStreams.exteq aeq eq x y ->
+       forall p q, p = q ->
+         opaque x ->
+         ropaque y ->
+       BraunStreams.exteq aeq eq (braunFraun (fraunBraun x)) y
+
+Check evenR'.
+*)
+
+(*
+Lemma braunBackBr :
+  forall (f:fraun) n (g:Br n) y q,
+    (forall (x:list bool) p,
+      ropaque g ->
+      aeq (f x) (g x p)) ->
+    ropaque g ->
+    aeq (braunFraun (fraunBraun f) y) (g y q).
+Proof.
+Admitted.
+*)
+  
+(*
+Lemma boddUnfold : forall (f : a -> a) (x : a),
+        opaque  f ->
+        coeq  (bodd  f x)
+          (oddFromEven  f (f x) (beven  f x)).
+Proof.
+  intros.
+  apply batCoeq.
+  intros; unfold bodd.
+  unfold bat; unfold fraunBraun; unfold toPrime; destruct b; simpl.
+  unfold oddR; simpl.
+  unfold Fix_measure_sub.
+  rewrite F_unfold.
+  simpl.
+  unfold oddFrom; simpl.
+  unfold toPrime; simpl.
+  reflexivity.
+  destruct b; simpl.
+*)
+
+
+Lemma boddUnfold : forall (f : a -> a) (x : a),
+        opaque  f ->
+        coeq  (bodd  f x)
+          (oddFromEven  f (f x) (beven  f x)).
+Proof.
+  intros; apply batCoeq.
+  intros. 
+  pose (@boddR f x b) as br.
+  destruct br; auto.
+  rewrite H.
+  pose (@oddRoddFrom f X x (succT b) b x0) as orr.
+  destruct orr.
+  rewrite H0.
+  unfold oddFromEven.
+  rewrite batFraun; auto.
+  assert (ord b < ord (succT b)) as p.
+  rewrite succTisS; auto.
+  rewrite (@oddFromToPr f (f x) (braunFraun (beven f x)) b b p); auto. (**)
+  unfold oddFromEvenPr.
+  rewrite oddFromInvariant; auto.
+  reflexivity.
+  auto.
+  unfold exteq; auto. unfold BraunStreams.exteq; auto.
+  intros.
+  unfold beven.
+  destruct aeqEquiv.
+  unfold Transitive in *.
+  apply Equivalence_Transitive with (y := @evenR f x b z t); 
+    assert (s = t) as st. 
+  apply le_uniqueness_proof.
+  subst. unfold evenR.  reflexivity.
+  apply le_uniqueness_proof.
+  subst.
+  apply Equivalence_Transitive with (y := fromPrime (toPrime (evenR f x)) b z t).
+  apply toFromPrime. intros.
+  unfold evenR. unfold evenR'.
+  apply fmapInvariant; auto.
+  unfold exteq; unfold BraunStreams.exteq; auto.
+  intros; apply oddRInvariant; auto.
+  unfold exteq; unfold BraunStreams.exteq; auto.
+  apply fromPrimeMorph; auto.
+  Check fraunBack.
+  unfold fexteq; intros.
+  Check fraunBack.
+  apply exteqSymm; auto.
+  Print Equivalence.
+  split; auto.
+  unfold Transitive; auto.
+  intros; subst; auto.
+  apply fraunBack; auto.
+  apply exteqRefl.
+  reflexivity.
+Qed.
 
 Require Import Recdef.
 
