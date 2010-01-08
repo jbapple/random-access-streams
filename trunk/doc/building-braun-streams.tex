@@ -138,7 +138,7 @@ smallEyes =
 Braun streams along with their {\tt cons} operation.
 The ``$\sim$'' before the pattern match in {\tt cons} is an {\em irrefutable pattern} -- a pattern which is matched lazily \cite{haskellReport}.
 The {\tt cons} operation is safe, so the stream {\tt eyes} is not $\bot$.
-The stream {\tt smallEyes} only takes up $O(1)$ space.
+The stream {\tt smallEyes} only uses $O(1)$ space.
 }
 \label{braunDef}
 \label{braunCons}
@@ -165,8 +165,8 @@ Like 2-3 finger trees, other stream candidates offering $O(1)$ deque operations 
 
 \begin{itemize}
 \item Skew binary random access lists, which offer $O(1)$ worst-case {\tt cons} \cite{okasakiSkewLists}
-\item Edison's \verb|BinaryRandList|, which supports {\tt cons} in $O(\log n)$ worst case time and $O(1)$ expected time \cite{edison,holtersThesis}
-\item Segmented binary lists, which offer $O(1)$ worst case {\tt cons} \cite{okasakiThesis}
+\item Edison's \verb|BinaryRandList|, which supports {\tt cons} in $O(\log n)$ worst-case time and $O(1)$ expected time \cite{edison,holtersThesis}
+\item Segmented binary lists, which offer $O(1)$ worst-case {\tt cons} \cite{okasakiThesis}
 \end{itemize}
 
 %What does linear time mean on infinite streams?
@@ -431,7 +431,7 @@ With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\
 \section{Cycling Possibly Infinite Lists}
 \label{cycleSect}
 
-As mentioned in Sect.~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ takes $\Omega(i)$ space in 2-3 trees and similar indexable deques.
+As mentioned in Sect.~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ uses $\Omega(i)$ space in 2-3 trees and similar indexable deques.
 If constructed properly, a cyclic stream with cycle length $m$ can be represented as a Braun stream in $O(m^2)$ space.
 This section describes an algorithm to produce a cyclic Braun stream of minimal size.
 
@@ -492,11 +492,10 @@ For a list {\tt x:xs} with length $n = 2^r m$, a \share equivalent to {\tt bcycl
 
 \begin{alltt}
 lcycle :: a -> [a] -> LStream a
-lcycle x xs = 
-  let ans = after x xs
-      after y [] = Cons y ans
-      after y (z:zs) = Cons y (after z zs)
-  in ans
+lcycle x xs = lcycleHelp x xs (x:xs)
+  where lcycleHelp :: a -> [a] -> [a] -> LStream a
+        lcycleHelp x xs []     = Cons x (lcycleHelp x xs xs)
+        lcycleHelp x xs (y:ys) = Cons y (lcycleHelp x xs ys)
 
 bcycle :: a -> [a] -> BS a
 bcycle x xs = fromLStream (lcycle x xs)
@@ -525,8 +524,8 @@ Applying this to {\tt bcycle x xs}, every substream of this Braun stream is equi
 {\tt fmap lhead (iterate (ltail}$^{2^i}${\tt ) (ltail}$^j\ ${\tt (lcycle x xs)))} 
 \\
 for some $i$ and $j$.
-The stream at such a location is denoted $\langle 2^i,j \rangle$, which is called its {\em address}.
-The members of this pair are called the {\em increment} and {\em offset}, respectively.
+The stream at such a location is denoted $\langle 2^i,j \rangle$, which shall be called its {\em address}.
+The members of this pair shall be called the {\em increment} and {\em offset}, respectively.
 On any cyclic {\tt LStream} {\tt ys} with cycle length $n$, {\tt ltail}$^k\ ${\tt ys} is bisimilar to {\tt ltail}$^l\ ${\tt ys} whenever $k \equiv l \mod n$.
 Therefore, the streams $\langle i,j \rangle$ and $\langle k,l \rangle$ in the Braun stream {\tt bcycle x xs} are equivalent if $i \equiv k \mod n$ and $j \equiv l \mod n$.
 (Henceforth, addresses, increments, and offsets will only be identified up to equivalence modulo $n$.)
