@@ -1,19 +1,7 @@
 Set Implicit Arguments.
-Set Contextual Implicit.
-Unset Strict Implicit. 
-Set Reversible Pattern Implicit. 
-(*Set Maximal Implicit Insertion.*)
 
-Require Import Setoid.
-Require Import List.
-Require Import Coq.Init.Wf.
-Require Import Coq.Program.Wf.
-Require Import Coq.Arith.Wf_nat.
-Require Import Coq.Arith.Div2.
-Require Import Coq.omega.Omega.
-Require Import Coq.Program.Equality.
-Require Import Coq.Arith.Euclid.
-Require Import Recdef.
+Require Export BraunStreams. 
+Require Export IterateCorrect.
 
 Section type.
 
@@ -29,7 +17,7 @@ CoInductive cleq (A:Set) : CoList A -> CoList A -> Prop :=
            cleq (Cons x xs) (Cons y ys).
 
 Inductive FiniteCoList (A:Set) : CoList A -> nat -> Prop :=
-| FiniteNil : FiniteCoList Nil 0
+| FiniteNil : FiniteCoList (Nil _) 0
 | FiniteCons : forall hed tyl n, 
   FiniteCoList tyl n
   -> FiniteCoList (Cons hed tyl) (S n).
@@ -51,60 +39,19 @@ CoFixpoint streamCycle' (A:Set) (x:A) (xs:CoList A) (rest:CoList A)
 Definition streamCycle (A:Set) (x:A) (xs:CoList A) : Stream A :=
   streamCycle' x xs (Cons x xs).
 
-CoInductive Braun (A:Set) : Set :=
-| Conb : A -> Braun A -> Braun A -> Braun A.
-
-Definition frobb n (x:Braun n) : Braun n :=
-  match x with
-    | Conb h o e => Conb h o e
-  end.
-
-Lemma frobbeq : forall A (x:Braun A), x = frobb x.
-Proof.
-  destruct x; simpl; reflexivity.
-Qed.
-
-
-Fixpoint applyn (A:Set) (n:nat) (f:A->A) (x:A) : A :=
-  match n with
-    | 0 => x
-    | S m => f (applyn m f x)
-  end.
-
-Fixpoint bat (A:Set) (x:Braun A) (b:list bool) {struct b} 
-  : A :=
-  match x with
-    | Conb h o e =>
-      match b with
-        | nil => h
-        | true  :: r => bat o r
-        | false :: r => bat e r
-      end
-  end.
-
-Check bat.
-
-Fixpoint ord (x:list bool) : nat :=
-  match x with
-    | nil => 0
-    | true::r  => 1 + 2*(ord r)
-    | false::r => 2 + 2*(ord r)
-  end.
-
-Variable iterate: forall (A:Set), (A->A) -> A -> Braun A.
+Variable iterate: forall (A:Set), (A->A) -> A -> braun A.
 
 Variable iterp : 
   forall (A:Set) f (x:A) b, 
     applyn (ord b) f x
     = bat (iterate f x) b.
-
-
+(*
 CoFixpoint repcl (A:Set) (x:A) :=
   Cons x (repcl x).
-
+*)
 Definition frobcl (A:Set) (x:CoList A) : CoList A :=
   match x with
-    | Nil => Nil
+    | Nil => Nil _
     | Cons h t => Cons h t
   end.
 
@@ -113,7 +60,7 @@ Lemma frobeqcl :
 Proof.
   destruct x; simpl; reflexivity.
 Qed.
-
+(*
 Lemma infinf :
   forall (A:Set) (x:A), InfiniteCoList (repcl x).
 Proof.
@@ -136,39 +83,40 @@ Proof.
   apply infinf.
   Guarded.
 Qed.
-
+*)
 CoInductive BraunRef (A:Set) : Set :=
 | Conr : A -> BraunRef A -> BraunRef A -> BraunRef A
 | Ref : list bool -> BraunRef A.
 
 Inductive FiniteBraun (A:Set) : BraunRef A -> nat -> Prop :=
-| FiniteRef : forall b, FiniteBraun (Ref b) 1
+| FiniteRef : forall b, FiniteBraun (Ref _ b) 1
 | FiniteSum : forall h o e l r, 
   FiniteBraun o l ->
   FiniteBraun e r ->
   FiniteBraun (@Conr A h o e) (l+r).
-
+(*
 CoInductive InfiniteBraun (A:Set) : BraunRef A -> Prop :=
 | InfiniteConr : forall h o e,
   InfiniteBraun o ->
   InfiniteBraun e ->
   InfiniteBraun (Conr h o e).
-
+*)
+(*
 CoFixpoint repbr (A:Set) (x:A) :=
   let r := repbr x in
   Conr x r r.
-
+*)
 Definition frob n (x:BraunRef n) : BraunRef n :=
   match x with
     | Conr h o e => Conr h o e
-    | Ref b => Ref b
+    | Ref b => Ref _ b
   end.
 
 Lemma frobeq : forall n (x:BraunRef n), x = frob x.
 Proof.
   destruct x; simpl; reflexivity.
 Qed.
-
+(*
 Lemma infbr :
   forall (A:Set) (x:A), InfiniteBraun (repbr x).
 Proof.
@@ -193,32 +141,50 @@ Proof.
   inversion Heqy.
   Guarded.
 Qed.
-
+*)
 CoInductive delay (a:Set) : Set :=
   wait : delay a -> delay a
 | halt : a -> delay a.
 
-Inductive halts (a:Set) : delay a -> Set :=
-  more : forall d, halts d -> halts d
-| done : forall v, halts (halt v).
 
-Definition get a b (g:{f:a -> delay b & forall x, halts (f x)}) (y:a) : b.
+Definition frod a (x:delay a) : delay a :=
+  match x with
+    | wait y => wait y
+    | halt y => halt y
+  end.
+
+Lemma frodeq : forall a (x:delay a), x = frod x.
+Proof.
+  destruct x; simpl; reflexivity.
+Qed.
+
+
+Inductive halts (a:Set) : delay a -> nat -> Set :=
+  more : forall d n, halts d n -> halts (wait d) (S n)
+| done : forall v, halts (halt v) 0.
+
+Check ex.
+
+Definition get a b (g:{f:a -> delay b & forall x, {n:nat & halts (f x) n}}) (y:a) : b.
 clear; intros; destruct g as [f ph].
 pose (ph y) as py.
-induction py.
-exact IHpy.
+destruct py.
+induction h.
+exact IHh.
 exact v.
 Defined.
 
+Check get.
+
 Definition terminates a b c (f:a -> b -> delay c) x := 
-  forall y, halts (f x y).
+  forall y, {n:nat & halts (f x y) n}.
 
 CoFixpoint context a g x b : delay a :=
   match (x,b) with
     | (Conr v _ _, nil) => halt v
-    | (Conr _ o _, true::r) => wait (context g o r)
-    | (Conr _ _ e, false::r) => wait (context g e r)
-    | (Ref p, r) => wait (context g g (p++r))
+    | (Conr _ o _, true::r) => wait (context _ g o r)
+    | (Conr _ _ e, false::r) => wait (context _ g e r)
+    | (Ref p, r) => wait (context _ g g (p++r))
   end.
 
 Definition trace a g b := @context a g g b.
@@ -236,678 +202,18 @@ apply t. exact b.
 Defined.
 
 Print gtrace.
+Print get.
 
-
-(*
-Inductive Context A (g:BraunRef A) : BraunRef A -> list bool -> A -> Prop :=
-  textNil : forall v o e, Context g (Conr v o e) nil v
-| textOdd : forall v h o e r, 
-            Context g o r v ->
-            Context g (Conr h o e) (true :: r) v
-| textEve : forall v h o e r, 
-            Context g e r v ->
-            Context g (Conr h o e) (false :: r) v
-| textPnt : forall p r v,
-            Context g g (p++r) v ->
-            Context g (Ref p) r v.
-*)
-(*
-Definition Trace A g b v := @Context A g g b v.
-
-Definition WellFormed (A:Set) := 
-  {g | forall b, exists v, @Trace A g b v}.
-
-Lemma trace : forall (A:Set) (p:WellFormed A) (b:list bool), 
-  A.
-Proof.
-  clear.
-  intros.
-  destruct p.
-  pose (e b) as ev.
-  destruct ev.
-  destruct g.
-  unfold WellFormed in *.
-  pose (p b) as ev.
-  destruct ev.
-  generalize dependent A.
-  dependent induction b.
-  intros.
-  
-
-Definition trace (A:Set) g (p:WellFormed g) b : A :=
-  match p b with
-    | ex_intro v _ => v
-  end.
-*)
-Definition equivBS A (x:Braun A) y :=
+Definition equivBS A (x:braun A) y :=
   forall b, bat x b = bat y b.
 
 Definition equivBR a (x:wellFormed a) y :=
   forall b, gtrace x b = gtrace y b.
 
-Definition equiv a (x:Braun a) y :=
+Definition equiv a (x:braun a) y :=
   forall b, bat x b = gtrace y b.
 
-
-
-Check bat.
-
-Definition 
-
-
-CoInductive coeq A : Braun A -> Braun A -> Prop :=
-| co : forall x y od od' ev ev',
-        (x = y) -> coeq od od' -> coeq ev ev'
-        -> coeq (Conb x od ev) (Conb y od' ev').
-
-
-Fixpoint concrete A (b:BraunRef A) (l:list bool) : Prop :=
-  match b with
-    | Conr _ o e =>
-      match l with
-        | nil => True
-        | true::tl => concrete o tl
-        | false::tl => concrete e tl
-      end
-    | _ => False
-  end.
-
-Variable riterate: forall (A:Set), (A->A) -> A -> BraunRef A.
-
-Fixpoint upto' A (x:BraunRef A) r b :=
-  match b with
-    | nil => (x,(rev r,nil))
-    | c::d => 
-      match x with
-        | Conr h o e =>
-          match c with
-            | true  => upto' o (c::r) d
-            | false => upto' e (c::r) d
-          end
-        | Ref v => (x,(rev r,b))
-      end
-  end.
-(*
-Fixpoint uptoo A (x:BraunRef A) r b :=
-  match b with
-    | nil => 
-      match x with
-        | Conr h _ _ => inl h
-        | Ref v => inr (v,(rev r,nil))
-    | c::d => 
-      match x with
-        | Conr h o e =>
-          match c with
-            | true  => upto' o (c::r) d
-            | false => upto' e (c::r) d
-          end
-        | Ref v => (x,(rev r,b))
-      end
-  end.
-*)
-Definition upto A x b := @upto' A x nil b.
-
-Require Import List.
-
-Lemma appnil :
-  forall A x (y:A) z,
-    (x ++ y::nil)++z = x ++ y::z.
-Proof.
-  clear; induction x; intros.
-  simpl. auto.
-  simpl.
-  erewrite IHx. auto.
-Qed.
-
-Lemma revapp :
-  forall A y (x:A) z,
-    rev (x :: y) ++ z = rev y ++ x::z.
-Proof.
-  clear; induction y; intros.
-  simpl. auto.
-  simpl.
-  erewrite <- IHy.
-  rewrite appnil. auto.
-Qed.
-
-Lemma uptoAppend :
-  forall A b c x, 
-    let (_,ht) := @upto' A x c b in
-      let (hed,tyl) := ht in
-        hed++tyl = (rev c)++b.
-Proof.
-  clear.
-  intros.
-  remember (upto' x c b) as uxb.
-  destruct uxb.
-  destruct p.
-
-  generalize dependent l0.
-  generalize dependent x.
-  generalize dependent b0.
-  generalize dependent c.
-  generalize dependent b.
-  induction l; induction b; destruct x; intros; unfold upto in Hequxb; unfold upto' in Hequxb; simpl in *; inversion Hequxb; auto.
-  fold (upto' x2 (a::c) b) in *.
-  fold (upto' x1 (a::c) b) in *.
-  destruct a.
-  transitivity (rev (true::c) ++ b).
-  eapply IHb. apply Hequxb.
-  apply revapp.
-  transitivity (rev (false::c) ++ b).
-  eapply IHb. apply Hequxb.
-  apply revapp.
-  fold (upto' x2 (a0::c) b) in *.
-  fold (upto' x1 (a0::c) b) in *.
-  destruct a0.
-  transitivity (rev (true::c) ++ b).
-  eapply IHb. apply Hequxb.
-  apply revapp.
-  transitivity (rev (false::c) ++ b).
-  eapply IHb. apply Hequxb.
-  apply revapp.
-Qed.
-
-(*
-Fixpoint rbat (A:Set) (x:BraunRef A) (b:list bool) {struct b} 
-  : option (A + nat) :=
-  match x with
-    | Conr h o e =>
-      match b with
-        | nil => Some (inl _ h)
-        | true  :: r => rbat o r
-        | false :: r => rbat e r
-      end
-    | Ref n =>
-      match b with
-        | nil => Some (inr _ n)
-        | _ => None
-      end
-  end.
-*)
-Fixpoint evenp (n:nat) : nat+nat :=
-  match n with
-    | 0 => inl _ 0
-    | 1 => inr _ 0
-    | S (S m) => 
-      match evenp m with
-        | inl a => inl _ (S a)
-        | inr a => inr _ (S a)
-      end
-  end.
-
-Lemma evenis : let P n :=
-  match evenp n with
-    | inl x => x+x = n
-    | inr x => 1+x+x = n
-  end
-  in forall n, P n.
-Proof.
-  clear.
-  intros.
-  apply lt_wf_ind.
-  intros.
-  unfold P in *.
-  clear P.
-  destruct n0.
-  simpl; auto.
-  simpl.
-  destruct n0.
-  auto.
-  remember (evenp n0) as en.
-  destruct en.
-  assert (n1+n1 = n0).
-  assert (match evenp n0 with
-            | inl z => z + z = n0
-            | inr z => 1 + z + z = n0
-          end).
-  apply H.
-  auto.
-  rewrite <- Heqen in H0.
-  auto.
-  auto with arith.
-  omega.
-  assert (match evenp n0 with
-            | inl z => z + z = n0
-            | inr z => 1 + z + z = n0
-          end).
-  apply H.
-  auto.
-  rewrite <- Heqen in H0.
-  omega.
-Qed.
-
-Lemma evenleft : forall n x, 
-  evenp n = inl _ x -> x+x = n.
-Proof.
-  clear.
-  intros.
-  assert (match evenp n with
-            | inl x => x+x = n
-            | inr x => 1+x+x = n
-          end).
-  apply evenis.
-  rewrite H in H0. auto.
-Qed.
-
-Lemma evenright : forall n x, 
-    evenp n = inr _ x -> 1+x+x = n.
-Proof.
-  clear.
-  intros.
-  assert (match evenp n with
-            | inl x => x+x = n
-            | inr x => 1+x+x = n
-          end).
-  apply evenis.
-  rewrite H in H0. auto.
-Qed.
-
-Function unord (x:nat) {measure id x} : list bool :=
-  match x with
-    | 0 => nil
-    | S y => 
-      match evenp y with
-        | inl a => true :: unord a
-        | inr a => false :: unord a
-      end
-  end.
-clear; intros.
-unfold id.
-induction y.
-simpl in teq0.
-inversion teq0.
-auto.
-simpl in teq0.
-clear IHy.
-destruct y.
-inversion teq0.
-remember (evenp y) as ey.
-destruct ey.
-Check evenleft.
-inversion teq0.
-subst.
-clear teq0.
-Check evenleft.
-assert (n+n=y).
-apply evenleft. auto.
-omega.
-inversion teq0.
-intros.
-unfold id.
-subst.
-assert (1 + a + a = y).
-apply evenright.
-auto.
-omega.
-Defined.
-
-Lemma eventwo : forall x, evenp (x+x) = inl _ x.
-Proof.
-  clear.
-  induction x.
-  auto.
-  remember (S x + S x) as y.
-  assert (y = S (S (x+x))).
-  omega.
-  subst.
-  rewrite H.
-  unfold evenp.
-  simpl.
-  fold (evenp (x + x)).
-  rewrite IHx.
-  reflexivity.
-Qed.
-
-Lemma eventhree : forall x, evenp (S (x+x)) = inr _ x.
-Proof.
-  clear.
-  induction x.
-  auto.
-  remember (S (S x + S x)) as y.
-  assert (y = S (S (S (x+x)))).
-  omega.
-  subst.
-  rewrite H.
-  unfold evenp.
-  simpl.
-  fold (evenp (S (x + x))).
-  rewrite IHx.
-  reflexivity.
-Qed.
-
-Lemma unt : forall x, unord (ord x) = x.
-Proof.
-  clear.
-  induction x.
-  auto.
-  destruct a.
-  simpl.
-  assert (forall y, y + y = y + (y + 0)).
-  intros.
-  omega.
-  rewrite <- H.
-  simpl.
-  rewrite unord_equation.
-  rewrite eventwo.
-  f_equal. auto.
-  simpl.
-  assert (forall y, y + y = y + (y + 0)).
-  intros.
-  omega.
-  rewrite <- H.
-  rewrite unord_equation.
-  rewrite eventhree.
-  f_equal. auto.
-Qed.
-
-Lemma tun : let P x := ord (unord x) = x in 
-  forall x, P x.
-Proof.
-  clear.
-  intros.
-  apply lt_wf_ind.
-  intros.
-  unfold P in *.
-  clear P.
-  destruct n.
-  auto.
-  rewrite unord_equation.
-  remember (evenp n) as en.
-  destruct en.
-  simpl.
-  rewrite H.
-  f_equal.
-  transitivity (n0 + n0).
-  omega.
-  apply evenleft. auto.
-  Check evenleft.
-  assert (n0 + n0 = n).
-  apply evenleft.
-  auto.
-  omega.
-  simpl.
-  f_equal.
-  rewrite H.
-  transitivity (S (n0 + n0)).
-  auto with arith.
-  transitivity (1 + n0 + n0).
-  auto with arith.
-  apply evenright.
-  auto.
-  assert (1 + n0 + n0 = n).
-  apply evenright. auto.
-  omega.
-Qed.
-
-Definition WellBraun A (x:BraunRef A) :=
-  forall b,
-    let (res,ht) := upto x b in
-      let (hed,tyl) := ht in 
-        match res with
-          | Ref v => v < (ord hed)
-          | _ => True
-        end.
-(*
-      | ( => True
-      | Some (inl _) => True
-      | Some (inr n) => n < (ord b) (*
-        match rbat x (unord n) with
-          | Some (inl _) => True
-          | _ => False
-        end *)
-    end.
-*)
-Print BraunRef.
-
-Print rev.
-
-Locate "_ ++ _".
-(*
-Print rbat.
-
-Lemma uptorbat : 
-  forall A b (x:BraunRef A),
-    match rbat x b with
-      | None => exists t, exists v, upto x b = (Ref _ v, t)
-      | Some (inl h) => exists o, exists e, upto x b = (Conr h o e, nil)
-        =>(Ref= Some (inr _ v) <-> exists t, upto x b = (Ref _ v, t).
-Proof.
-  clear; induction b; intros.
-  simpl. split; intros.
-  destruct x.
-  inversion H.
-  inversion H. exists nil. auto.
-  destruct H. inversion H. auto.
-  destruct a; split; intros;  destruct x.
-  apply (IHb x1 v); auto.
-  inversion H. 
-  apply (IHb x1 v); auto.
-  destruct H; inversion H; subst; clear H.
-  transitivity (rbat (Ref A v) nil).
-  simpl.
-  eapply (IHb (Ref A v)
-*)  
-  
-
-Fixpoint pow x y :=
-  match y with
-    | 0 => 1
-    | S z => x * pow x z
-  end.
-
-Eval compute in ord(unord 4 ++ true :: nil).
-Eval compute in ord(unord 40 ++ true :: nil).
-Eval compute in ord(unord 6 ++ true :: nil).
-Eval compute in ord(unord 8 ++ true :: nil).
-Eval compute in unord 8.
-Eval compute in length(unord 40).
-Eval compute in length(unord 38).
-Eval compute in ord(unord 38 ++ true :: nil).
-Eval compute in length(unord 5).
-Eval compute in ord(unord 5 ++ true :: nil).
-Eval compute in 
-  let f a b :=
-    (ord (unord a ++ b::nil),
-      a + pow 2 (length (unord a)) + if b then 0 else a)
-    in 
-    f 0 true :: f 1 true :: f 2 true :: f 3 true :: f 4 true  ::
-    f 0 false :: f 1 false :: f 2 false :: f 3 false :: f 4 false ::
-    nil.
-
-Lemma ordAppendOne :
-  forall a b, ord (a ++ b::nil) = 
-    ord a 
-    + pow 2 (length a) * ord (b::nil).
-Proof.
-  clear.
-  induction a; intros.
-  simpl. destruct b; auto.
-  simpl. destruct a; destruct b; simpl; try rewrite IHa; simpl; try omega.
-Qed.
-  
-Lemma ordLengthMax :
-  forall a, S (ord a) < pow 2 (S (length a)).
-Proof.
-  clear; induction a; simpl.
-  omega.
-  destruct a; simpl.
-  unfold pow in IHa; fold (pow 2 (length a0)) in *; try omega.
-  unfold pow in IHa; fold (pow 2 (length a0)) in *; try omega.
-Qed.
-
-Lemma ordLengthMin :
-  forall a, S (ord a) >= pow 2 (length a).
-Proof.
-  clear; induction a; simpl.
-  omega.
-  destruct a; simpl; omega.
-Qed.
-
-Lemma powMono :
-  forall x y, x <= y -> pow 2 x <= pow 2 y.
-Proof.
-  clear.
-  intros.
-  induction H. auto.
-  unfold pow; fold (pow 2 x); fold (pow 2 m). omega.
-Qed.
-
-
-Lemma ordLength :
-  forall a b, ord a < ord b ->
-    length a <= length b.
-Proof.
-  clear.
-  intros.
-  remember (lt_eq_lt_dec (length a) (length b)) as ll.
-  destruct ll as [[alb|aeb]|bla]; try omega.
-  clear Heqll.
-  assert (ord b < ord a).
-  assert (S (ord b) < pow 2 (S (length b))); try apply ordLengthMax.
-  assert (pow 2 (length a) <= S (ord a)); try apply ordLengthMin.
-  assert (pow 2 (S (length b)) <= pow 2 (length a)).
-  apply powMono. omega. omega. omega.
-Qed.
-
-Lemma multLess :
-  forall a b c,
-    a <= b -> a*c <= b*c.
-Proof.
-  clear; intros.
-  induction H. auto.
-  simpl. omega.
-Qed.
-
-Lemma ordAppend :
-  forall d b c,
-    ord b < ord c -> ord (b ++ d) < ord (c ++ d).
-Proof.
-  clear.
-  induction d; simpl; intros.
-  ssimpl_list; auto.
-  assert (ord ((b ++ a::nil)++d) < ord ((c ++ a::nil)++d)).
-  apply IHd.
-  rewrite ordAppendOne.
-  rewrite ordAppendOne.
-  assert (length b <= length c); try apply ordLength; auto.
-  assert (pow 2 (length b) <= pow 2 (length c)). eapply powMono. auto.
-  assert (pow 2 (length b) * ord (a::nil) <= pow 2 (length c) * ord (a::nil)).
-  apply multLess. auto.
-  omega.
-  rewrite appnil in H0.
-  rewrite appnil in H0.
-  apply H0.
-Qed.
-
-Print Assumptions ordAppend.
-
-Function find (A:Set) (x:BraunRef A) (p:WellBraun x) (b:list bool) 
-  {measure ord b} : A :=
-  let (ans,ht) := upto x b in
-    let (hed,tyl) := ht in
-      match ans with
-        | Conr h _ _ => h
-        | Ref v => find p ((unord v)++tyl)
-      end.
-clear; intros.
-unfold WellBraun in p.
-pose (p b).
-rewrite teq in y.
-assert (hed ++ tyl = b).
-transitivity (rev nil ++ b).
-pose (@uptoAppend A b nil x) as I.
-fold (upto x b) in I.
-rewrite teq in I. auto.
-simpl. auto.
-subst.
-apply ordAppend.
-rewrite tun. auto.
-Defined.
-
-Print find.
-Print find_tcc.
-Check find_tcc.
-Check find_terminate.
-Check find_ind.
-(*
-Print find_rec
-Print find_rect
-Print R_find_correct
-Print R_find_complete
-*)
-Print find_equation.
-Check find_equation.
-
-
-Print Assumptions find.
-
-
-
-(*
-
-Definition WellBraun A (b:BraunRef A) := forall l,
-  FiniteBraun b l -> fold_left and (map (concrete b) (map unord l)) True.
-*)
-Check (1,2).
-Print option.
-
-Check (inl (list nat) (inl bool 0)).
-
-Check modulo.
-(*
-Program Fixpoint sub (n:nat) (m:nat) (p:m<n) :=
-  match n with
-    | 0 => 0
-    | S n' => 
-      match m with
-        | 0 => n
-        | S m' => @sub n' m' _
-      end
-  end.
-Next Obligation.
-  auto with arith.
-Defined.
-
-Locate "{ _ } + { _ }".
-Print sumbool.
-Print sumor.
-
-Program Fixpoint mymod (n:nat) (m:nat) {measure id n} := 
-  match lt_eq_lt_dec n m with
-    | inleft (left _) => n
-    | inleft (right _) => 0
-    | inright p => mymod () m
-  end.
-Next Obligation.
-  unfold id.
-  generalize dependent m.
-  induction n.
-  intros.
-  inversion p.
-  intros.
-  unfold sub.
-  unfold sub
-  simpl.
-*)
-
-Locate "{ _ | _ }".
-Check modulo.
-Print sig.
-Check modulo.
-(*
-Definition mymod : nat -> nat -> nat.
-refine ( fun m n =>
-  match n with 
-    | 0 => 0
-    | S j => 
-      match modulo (S j) _ m with
-        | exist r _ => r
-      end
-  end).
-auto with arith.
-Defined.
-*)
+Require Import Arith.
 
 Function mymod (n:nat) (m:nat) {measure id n} : nat :=
   match m with
@@ -957,26 +263,318 @@ Admitted.
 Lemma mymodUnderYou : forall x y, mymod x (S y) < (S y).
 Admitted.
 
-  
+Check unit.
+Print unit.
 
-(*
-Program Definition mymod (m:nat) (n:nat) :=
-  match n with 
-    | 0 => 0
-    | _ => 
-      match modulo n _ m with
-        | r => r
+Print Stream.
+
+CoFixpoint streamIter (a:Set) f (x:a) := 
+  More x (streamIter f (f x)).
+
+CoFixpoint streamMap (a b:Set) (f:a -> b) (xs:Stream a) :=
+  match xs with
+    | More hed tyl => More (f hed) (streamMap f tyl)
+  end.
+  
+Definition powers x := streamIter (fun y => y*x) 1.
+Definition powersMod x n := 
+  streamMap (fun p => mymod p n) (powers x).
+
+CoFixpoint bettaHelp xs : delay unit :=
+  match xs with
+    | More hed tyl => 
+      match hed with
+        | 1 => halt tt
+        | _ => wait (bettaHelp tyl)
       end
   end.
-Next Obligation.
-  auto with arith.
-Defined.
-*)
-Print mymod.
+  
+(*
+CoFixpoint betta' n a : delay unit :=
+  let a' := mymod a n in
+    match a' with
+      | 0 => halt tt
+      | 1 => halt tt
+      | _ => wait (betta' n (2*a))
+    end.
 
-Print mymod.
-Print modulo.
-Check modulo.
+Definition betta n := betta' n 1.
+*)
+
+Definition betta n := 
+  match powersMod 2 n with
+    | More _ tyl => bettaHelp tyl
+  end.
+
+Definition stops a b (f:a -> delay b) x := {n:nat & halts (f x) n}.
+
+
+Lemma bettaStop :
+  forall n, stops betta (2*n + 1).
+Proof.
+Admitted.
+(*
+  clear.
+  Check lt_wf_rec.
+  clear.
+  intros.
+  Check (lt_wf_rec n (fun k => stops betta (2*k+1))).
+  apply (lt_wf_rec n (fun k => stops betta (2*k+1))).
+  clear n; intros.
+  destruct n.
+  unfold betta; unfold stops; simpl.
+  apply existT with (x := 0).
+  rewrite (frodeq (betta' 1 1)).
+  simpl.
+  constructor.
+Admitted.  
+*)
+
+
+(*
+Definition bettaSize n :=
+*)
+
+(*
+Fixpoint concrete A (b:BraunRef A) (l:list bool) : Prop :=
+  match b with
+    | Conr _ o e =>
+      match l with
+        | nil => True
+        | true::tl => concrete o tl
+        | false::tl => concrete e tl
+      end
+    | _ => False
+  end.
+
+Variable riterate: forall (A:Set), (A->A) -> A -> BraunRef A.
+
+Fixpoint upto' A (x:BraunRef A) r b :=
+  match b with
+    | nil => (x,(rev r,nil))
+    | c::d => 
+      match x with
+        | Conr h o e =>
+          match c with
+            | true  => upto' o (c::r) d
+            | false => upto' e (c::r) d
+          end
+        | Ref v => (x,(rev r,b))
+      end
+  end.
+*)
+(*
+Fixpoint uptoo A (x:BraunRef A) r b :=
+  match b with
+    | nil => 
+      match x with
+        | Conr h _ _ => inl h
+        | Ref v => inr (v,(rev r,nil))
+    | c::d => 
+      match x with
+        | Conr h o e =>
+          match c with
+            | true  => upto' o (c::r) d
+            | false => upto' e (c::r) d
+          end
+        | Ref v => (x,(rev r,b))
+      end
+  end.
+*)
+(*
+Definition upto A x b := @upto' A x nil b.
+
+Require Import List.
+*)
+Lemma appnil :
+  forall A x (y:A) z,
+    (x ++ y::nil)++z = x ++ y::z.
+Proof.
+  clear; induction x; intros.
+  simpl. auto.
+  simpl.
+  erewrite IHx. auto.
+Qed.
+
+Lemma revapp :
+  forall A y (x:A) z,
+    rev (x :: y) ++ z = rev y ++ x::z.
+Proof.
+  clear; induction y; intros.
+  simpl. auto.
+  simpl.
+  erewrite <- IHy.
+  rewrite appnil. auto.
+Qed.
+(*
+Lemma uptoAppend :
+  forall A b c x, 
+    let (_,ht) := @upto' A x c b in
+      let (hed,tyl) := ht in
+        hed++tyl = (rev c)++b.
+Proof.
+  clear.
+  intros.
+  remember (upto' x c b) as uxb.
+  destruct uxb.
+  destruct p.
+
+  generalize dependent l0.
+  generalize dependent x.
+  generalize dependent b0.
+  generalize dependent c.
+  generalize dependent b.
+  induction l; induction b; destruct x; intros; unfold upto in Hequxb; unfold upto' in Hequxb; simpl in *; inversion Hequxb; auto.
+  fold (upto' x2 (a::c) b) in *.
+  fold (upto' x1 (a::c) b) in *.
+  destruct a.
+  transitivity (rev (true::c) ++ b).
+  eapply IHb. apply Hequxb.
+  apply revapp.
+  transitivity (rev (false::c) ++ b).
+  eapply IHb. apply Hequxb.
+  apply revapp.
+  fold (upto' x2 (a0::c) b) in *.
+  fold (upto' x1 (a0::c) b) in *.
+  destruct a0.
+  transitivity (rev (true::c) ++ b).
+  eapply IHb. apply Hequxb.
+  apply revapp.
+  transitivity (rev (false::c) ++ b).
+  eapply IHb. apply Hequxb.
+  apply revapp.
+Qed.
+*)
+(*
+Fixpoint rbat (A:Set) (x:BraunRef A) (b:list bool) {struct b} 
+  : option (A + nat) :=
+  match x with
+    | Conr h o e =>
+      match b with
+        | nil => Some (inl _ h)
+        | true  :: r => rbat o r
+        | false :: r => rbat e r
+      end
+    | Ref n =>
+      match b with
+        | nil => Some (inr _ n)
+        | _ => None
+      end
+  end.
+*)
+(*
+Print rbat.
+
+Lemma uptorbat : 
+  forall A b (x:BraunRef A),
+    match rbat x b with
+      | None => exists t, exists v, upto x b = (Ref _ v, t)
+      | Some (inl h) => exists o, exists e, upto x b = (Conr h o e, nil)
+        =>(Ref= Some (inr _ v) <-> exists t, upto x b = (Ref _ v, t).
+Proof.
+  clear; induction b; intros.
+  simpl. split; intros.
+  destruct x.
+  inversion H.
+  inversion H. exists nil. auto.
+  destruct H. inversion H. auto.
+  destruct a; split; intros;  destruct x.
+  apply (IHb x1 v); auto.
+  inversion H. 
+  apply (IHb x1 v); auto.
+  destruct H; inversion H; subst; clear H.
+  transitivity (rbat (Ref A v) nil).
+  simpl.
+  eapply (IHb (Ref A v)
+*)  
+  
+
+
+Lemma ordAppendOne :
+  forall a b, ord (a ++ b::nil) = 
+    ord a 
+    + pow 2 (length a) * ord (b::nil).
+Proof.
+  clear.
+  induction a; intros.
+  simpl. destruct b; auto.
+  simpl. destruct a; destruct b; simpl; try rewrite IHa; simpl; try omega.
+Qed.
+  
+Lemma ordLengthMax :
+  forall a, S (ord a) < pow 2 (S (length a)).
+Proof.
+  clear; induction a; simpl.
+  omega.
+  destruct a; simpl.
+  unfold pow in IHa; fold (pow 2 (length a0)) in *; try omega.
+  unfold pow in IHa; fold (pow 2 (length a0)) in *; try omega.
+Qed.
+
+Lemma ordLengthMin :
+  forall a, S (ord a) >= pow 2 (length a).
+Proof.
+  clear; induction a; simpl.
+  omega.
+  destruct a; simpl; omega.
+Qed.
+
+Lemma powMono :
+  forall x y, x <= y -> pow 2 x <= pow 2 y.
+Proof.
+  clear.
+  intros.
+  induction H. auto.
+  unfold pow; fold (pow 2 x); fold (pow 2 m). omega.
+Qed.
+
+Lemma ordLength :
+  forall a b, ord a < ord b ->
+    length a <= length b.
+Proof.
+  clear.
+  intros.
+  remember (lt_eq_lt_dec (length a) (length b)) as ll.
+  destruct ll as [[alb|aeb]|bla]; try omega.
+  clear Heqll.
+  assert (ord b < ord a).
+  assert (S (ord b) < pow 2 (S (length b))); try apply ordLengthMax.
+  assert (pow 2 (length a) <= S (ord a)); try apply ordLengthMin.
+  assert (pow 2 (S (length b)) <= pow 2 (length a)).
+  apply powMono. omega. omega. omega.
+Qed.
+
+Lemma multLess :
+  forall a b c,
+    a <= b -> a*c <= b*c.
+Proof.
+  clear; intros.
+  induction H. auto.
+  simpl. omega.
+Qed.
+
+Lemma ordAppend :
+  forall d b c,
+    ord b < ord c -> ord (b ++ d) < ord (c ++ d).
+Proof.
+  clear.
+  induction d; simpl; intros.
+  ssimpl_list; auto.
+  assert (ord ((b ++ a::nil)++d) < ord ((c ++ a::nil)++d)).
+  apply IHd.
+  rewrite ordAppendOne.
+  rewrite ordAppendOne.
+  assert (length b <= length c); try apply ordLength; auto.
+  assert (pow 2 (length b) <= pow 2 (length c)). eapply powMono. auto.
+  assert (pow 2 (length b) * ord (a::nil) <= pow 2 (length c) * ord (a::nil)).
+  apply multLess. auto.
+  omega.
+  rewrite appnil in H0.
+  rewrite appnil in H0.
+  apply H0.
+Qed.
+
+Print Assumptions ordAppend.
 
 Fixpoint is2pow' (n:nat) i := 
   match i with
@@ -1067,6 +665,9 @@ Qed.
 (*
 Fixpoint incrof (n:nat) := n.
 *)
+
+Require Import Arith.Div2.
+
 Program Fixpoint floorlg x {measure id x} :=
   match div2 x with
     | 0 => 0
@@ -1132,7 +733,7 @@ Definition action
     +(A * CoList A * nat) :=
   match x with
     | inl (real,mod,f) => 
-      inl _ 
+      inl  
       (S real,
        mod,
        match f (mymod real mod,myincr real mod) with
@@ -1149,8 +750,8 @@ Definition action
        end)
     | inr (v,rem,sofar) =>
       match rem with
-        | Nil => inl _ (S sofar,S sofar,memo (S sofar))
-        | Cons hed tl => inr _ (hed,tl,S sofar)
+        | Nil => inl (S sofar,S sofar,memo (S sofar))
+        | Cons hed tl => inr (hed,tl,S sofar)
       end
   end.
 
@@ -1166,7 +767,7 @@ Locate "_ && _".
 
 Lemma BackAllAction :
   forall (A:Set) (x:A) xs n,
-  match applyn n (@action A) (inr _ (x,xs,0)) with
+  match applyn n (@action A) (inr (x,xs,0)) with
     | inl (r,m,f) => and (n = r) (and (r >= m) (BackAll f m r))
     | inr (y,ys,m) => m = n
   end.
@@ -1174,7 +775,7 @@ Proof.
   clear; induction n.
   simpl. auto.
   intros.
-  remember (applyn n (@action _) (inr _ (x,xs,0))) as s.
+  remember (applyn n (@action _) (inr  (x,xs,0))) as s.
   destruct s.
   destruct p.
   destruct p.
