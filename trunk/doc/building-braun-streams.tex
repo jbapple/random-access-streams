@@ -231,9 +231,9 @@ For streams, the details of what this means are complicated by the fact that the
 Given a linear stream forced to depth $i$ and a Braun stream constructed from it using {\tt slowFromLStream}, forcing the first $i$ nodes of the Braun stream will take $\Omega(i \log i)$ time.
 This is because {\tt cons} calls itself recursively on one of the two subtrees, as can be seen in Fig.~\ref{braunCons}.
 
-Okasaki presents a function {\tt makeArray} that builds a Braun tree from a linear list in $O(n)$ time, where $n$ is the length of the list \cite{okasakiBraun}.
+Okasaki presents a function {\tt makeArray} that builds a Braun tree from a linear list in $\Theta(n)$ time, where $n$ is the length of the list \cite{okasakiBraun}.
 Unfortunately, this algorithm builds the tree from the leaves up, which is unsuitable for building streams.
-Additionally, it does not produce a top-level constructor until the algorithm is complete, so the time complexity for {\tt at (makeArray l) []} is $O(n)$ when {\tt l} is of size $n$, rather than $O(1)$ as it would be with a root-first algorithm.
+Additionally, it does not produce a top-level constructor until the algorithm is complete, so the time complexity for {\tt at (makeArray l) []} is $\Omega(n)$ when {\tt l} is of size $n$, rather than $O(1)$ as it would be with a root-first algorithm.
 This section presents an linear-time algorithm ($O(i)$ when forcing the first $i$ nodes of the result) that works for streams.
 The code for the algorithm is displayed in Fig.~\ref{iterateCode}.
 
