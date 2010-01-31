@@ -15,9 +15,10 @@ iterate f x =
   in Braun x od ev
 
 *)
-Require Import List.
+
+Require Export List.
 Require Export Setoid.
-Require Import BraunFunctions.
+Require Export BraunFunctions.
 
 Set Implicit Arguments.
 
@@ -27,16 +28,13 @@ Variable (a : Set).
 Variable (aeq : relation a).
 Variable (aeqEquiv : Equivalence aeq).
 
-Definition braun := braun a.
-Definition fraun := fraun a.
-Definition coeq := coeq aeq.
-Definition exteq := @exteq a aeq a aeq.
-Definition fexteq := @BraunStreams.exteq a aeq (list bool) eq.
-Definition opaque := @opaque a a aeq aeq.
-(*
-Variable f : a -> a.
-Variable fOpaque : opaque f.
-*)
+Notation braun := (braun a).
+Notation fraun := (fraun a).
+Notation coeq := (coeq aeq).
+Notation exteq := (@exteq a aeq a aeq).
+Notation fexteq := (@BraunStreams.exteq a aeq (list bool) eq).
+Notation opaque := (@opaque a a aeq aeq).
+
 Ltac des :=
   intros; simpl in *;
   match goal with
@@ -170,7 +168,6 @@ end.
 Definition oddFromEvenPr f (x:a) (n:list bool) (v:Br n) : Br (succT n) := oddFromEvenPr' f x v.
 
 Definition toPrime (x:(forall n, Br n)) : fraun.
-unfold fraun.
 unfold Br.
 intros x l.
 apply (x (succT l) l).
@@ -178,7 +175,6 @@ rewrite succTisS. omega.
 Defined.
 
 Definition fromPrime (x:fraun) : (forall n, Br n).
-unfold fraun.
 unfold Br.
 intros x n b p.
 apply x.
@@ -219,7 +215,6 @@ Definition breq (x:forall n, Br n) (y:forall n, Br n) :=
 Lemma toPrimeMorph :
   forall x y, breq x y -> fexteq (toPrime x) (toPrime y).
 Proof.
-  unfold fexteq.
   unfold BraunStreams.exteq.
   unfold breq.
   unfold BraunStreams.opaque.
@@ -231,7 +226,7 @@ Qed.
 Lemma fromPrimeMorph :
   forall x y, fexteq x y -> breq (fromPrime x) (fromPrime y).
 Proof.
-  unfold fexteq.
+
   unfold BraunStreams.exteq.
   unfold breq.
   unfold BraunStreams.opaque.
@@ -404,7 +399,7 @@ Proof.
   reflexivity.
   destruct z. simpl in *.
   apply oddFromInvariant; auto.
-  unfold exteq. unfold BraunStreams.exteq.
+   unfold BraunStreams.exteq.
   intros; apply fOpaque; auto.
   intros.
   apply evensRinvariant.
@@ -479,9 +474,8 @@ Proof.
   rewrite (oddFromUnfold gOpaque).
   apply IHn; auto.
   unfold fevens.
-  unfold fexteq. unfold BraunStreams.exteq.
+  unfold BraunStreams.exteq.
   intros; subst.
-  unfold fexteq in bc.
   unfold BraunStreams.exteq in bc.
   apply bc; auto.
   apply opaqueEq; apply aeqEquiv.
@@ -559,11 +553,11 @@ Proof.
   unfold fevens. simpl.
   rewrite oddFromMorph.
   reflexivity.  auto. auto.
-  unfold exteq.
+
   unfold BraunStreams.exteq; intros.
   apply fOpaque; auto.
   reflexivity.
-  unfold fexteq. unfold BraunStreams.exteq. intros. subst. reflexivity.
+  unfold BraunStreams.exteq. intros. subst. reflexivity.
   auto. auto.
   apply opaqueEq. apply aeqEquiv.
   apply opaqueEq. apply aeqEquiv.
@@ -802,11 +796,11 @@ Proof.
   unfold Fix_measure_sub.
   rewrite F_unfold.
   apply oddFromInvariant; auto.
-  unfold exteq; unfold BraunStreams.exteq; intros; apply fOpaque; auto.
+   unfold BraunStreams.exteq; intros; apply fOpaque; auto.
   intros.
   unfold evenR'.
   apply fmapInvariant; auto.
-  unfold exteq; unfold BraunStreams.exteq; intros; apply fOpaque; auto.
+   unfold BraunStreams.exteq; intros; apply fOpaque; auto.
   intros.
   simpl in s0.
   fold I.
@@ -904,7 +898,7 @@ Proof.
   rewrite batFraun; auto.
   unfold toPrime.
   apply oddRInvariant; auto.
-  unfold exteq; unfold BraunStreams.exteq; auto.
+   unfold BraunStreams.exteq; auto.
   reflexivity.
 Qed.
 
@@ -1000,7 +994,7 @@ Proof.
   rewrite oddFromInvariant; auto.
   reflexivity.
   auto.
-  unfold exteq; auto. unfold BraunStreams.exteq; auto.
+   auto. unfold BraunStreams.exteq; auto.
   intros.
   unfold beven.
   destruct aeqEquiv.
@@ -1015,12 +1009,12 @@ Proof.
   apply toFromPrime. intros.
   unfold evenR. unfold evenR'.
   apply fmapInvariant; auto.
-  unfold exteq; unfold BraunStreams.exteq; auto.
+   unfold BraunStreams.exteq; auto.
   intros; apply oddRInvariant; auto.
-  unfold exteq; unfold BraunStreams.exteq; auto.
+   unfold BraunStreams.exteq; auto.
   apply fromPrimeMorph; auto.
   Check fraunBack.
-  unfold fexteq; intros.
+  intros.
   Check fraunBack.
   apply exteqSymm; auto.
   Print Equivalence.
@@ -1051,7 +1045,7 @@ Proof.
   destruct bo.
   rewrite H.
   apply oddRInvariant; auto.
-  unfold exteq; unfold BraunStreams.exteq; auto.
+   unfold BraunStreams.exteq; auto.
   reflexivity.
 Qed.
 
