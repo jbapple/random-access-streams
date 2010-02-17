@@ -9,12 +9,13 @@ Variable (aeq : relation a).
 Variable (aeqEquiv : Equivalence aeq).
 
 
-Check iter.
+Check IterateCorrect.iter.
+Print Z.
 Check opaque.
 
 Definition combiner :=
   (fun (f:a->a) (fOpaque:@opaque a a aeq aeq f) =>
-    @iter a aeq aeqEquiv
+    @IterateCorrect.iter a aeq aeqEquiv
     (@oddFromEven a aeq aeqEquiv)
     (fun g x b og => @oddFromEvenUnfold a aeq aeqEquiv g og x b)
     (fun f g x y v w fo go fg xy vw =>

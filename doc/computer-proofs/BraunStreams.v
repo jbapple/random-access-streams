@@ -122,7 +122,7 @@ Variable (beq : relation b).
 Variable (beqEquiv : Equivalence beq).
 
 Locate " _ --> _ ".
-Print respectful.
+
 
 Definition exteq (f:b -> a) (g:b -> a) := 
   forall x y, 
@@ -584,7 +584,7 @@ Require Import Eqdep_dec.
 Require Import Peano_dec.
 
 Theorem K_nat :
-   forall (x:nat) (P:x = x -> Prop), P (refl_equal x) -> forall p:x = x, P p.
+   forall (x:nat) (P:x = x -> Prop), P (@refl_equal nat x) -> forall p:x = x, P p.
 Proof.
   intros; apply K_dec_set with (p := p).
   apply eq_nat_dec.
@@ -616,16 +616,16 @@ Theorem le_uniqueness_proof : forall (n m : nat) (p q : n <= m), p = q.
 Proof.
   induction p using le_ind'; intro q.
   replace (le_n n) with
-   (eq_rect _ (fun n0 => n <= n0) (le_n n) _ (refl_equal n)).
+   (eq_rect _ (fun n0 => n <= n0) (le_n n) _ (@refl_equal nat n)).
   2:reflexivity.
-  generalize (refl_equal n).
+  generalize (@refl_equal nat n).
      pattern n at 2 4 6 10, q; case q; [intro | intros m l e].
       rewrite <- eq_rect_eq_nat; trivial.
       contradiction (le_Sn_n m); rewrite <- e; assumption.
   replace (le_S n m p) with
-   (eq_rect _ (fun n0 => n <= n0) (le_S n m p) _ (refl_equal (S m))).
+   (eq_rect _ (fun n0 => n <= n0) (le_S n m p) _ (@refl_equal nat (S m))).
   2:reflexivity.
-   generalize (refl_equal (S m)).
+   generalize (@refl_equal nat (S m)).
      pattern (S m) at 1 3 4 6, q; case q; [intro Heq | intros m0 l HeqS].
       contradiction (le_Sn_n m); rewrite Heq; assumption.
       injection HeqS; intro Heq; generalize l HeqS.
