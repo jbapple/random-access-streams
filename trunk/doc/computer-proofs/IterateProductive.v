@@ -1,4 +1,10 @@
 (* 
+Copyright 2009, Jim Apple
+This file may be freely distributed and remixed under the terms of the Creative Commons Attribution Share-Alike license, v. 3.0:
+http://creativecommons.org/licenses/by-sa/3.0/
+*)
+
+(*
 This file proves the productivity of iterate in:
 
 data Braun a = Braun a (Braun a) (Braun a)
@@ -13,12 +19,13 @@ iterate f x =
   let od = oddFromEven f x ev
       ev = fmap f od
   in Braun x od ev
-
 *)
 
 Require Export List.
 Require Export Setoid.
 Require Export BraunFunctions.
+Require Export Program.
+Require Export Omega.
 
 Set Implicit Arguments.
 
@@ -43,12 +50,6 @@ Ltac des :=
     | [xy : coeq ?x ?y |- _] => inversion_clear xy; auto
     | _ => auto
   end.
-
-Require Import Coq.Program.Tactics.
-Require Import Coq.Program.Wf.
-Require Import Recdef.
-
-Require Import Coq.omega.Omega.
 
 (* A Br n is a Braun stream that is only defined for indices less than n *)
 
@@ -141,8 +142,8 @@ Lemma oddFromEvenPrTrue : forall f x n v r p i j,
 Proof.
   intros.
   simpl.
-  rewrite (le_uniqueness_proof i _).
-  rewrite (le_uniqueness_proof j _).
+  erewrite (le_uniqueness_proof i _).
+  erewrite (le_uniqueness_proof j _).
   reflexivity.
 Qed.
 
@@ -152,7 +153,7 @@ Lemma oddFromEvenPrFalse : forall f x n v r p i,
 Proof.
   intros.
   simpl.
-  rewrite (le_uniqueness_proof i _).
+  erewrite (le_uniqueness_proof i _).
   reflexivity.
 Qed.
 
@@ -737,7 +738,25 @@ Function oddR (X:A) (n:list bool) (b:list bool) (p:ord b < ord n) {measure ord n
 (* Error: Unable to find an instance for the variables b, p.*)
 *)
 
+(* For coq svn: *)
 
+Program Fixpoint oddR f (X:a) (n:list bool) {measure (ord n)} : Br n :=
+  fun b p => 
+    let er := evenR' f (oddR f X b _) in
+      @oddFromEvenPr f (f X) b er b _.
+Next Obligation.
+  apply obl.
+Defined.
+
+Print oddR_func.
+Print oddR.
+
+Check oddR.
+
+
+
+(* For coq v 8.2: *)
+(*
 Program Fixpoint oddR f (X:a) (n:list bool) {measure ord n} : Br n :=
   fun b p => 
     let er := evenR' f (oddR b) in
@@ -745,6 +764,9 @@ Program Fixpoint oddR f (X:a) (n:list bool) {measure ord n} : Br n :=
 Next Obligation.
   apply obl.
 Defined.
+*)
+
+
 
 Definition bodd f x := fraunBraun (toPrime (oddR f x)).
 
@@ -753,12 +775,8 @@ Functional Scheme oddRsc := Induction for oddR Sort Prop.
 Error: Cannot define graph(s) for oddR
 *)
   
-  
-    
 
-(*
-Axiom proofIrrel : forall (P:Prop) (p q:P), p = q.
-*)
+(* coq svn: *)
 Lemma oddRoddFrom : 
   forall f (fOpaque : opaque f) X n b p, 
     exists q,
@@ -779,8 +797,62 @@ Proof.
   destruct a0; simpl in *; inversion Heqnn.
 
   unfold oddR at 1.
+  unfold oddR_func.
+  unfold Fix_sub.
+  rewrite F_unfold. 
+  apply oddFromInvariant; auto.
+   unfold BraunStreams.exteq; intros; apply fOpaque; auto.
+  intros.
+  unfold evenR'.
+  apply fmapInvariant; auto.
+   unfold BraunStreams.exteq; intros; apply fOpaque; auto.
+  intros.
+  simpl in s0.
+  unfold oddR.
+  unfold oddR_func.
+  unfold Fix_sub.
+  unfold evenR'.
+  erewrite Fix_F_inv.
+  unfold proj1_sig.
+  unfold lt in s0, t0.
+  rewrite (le_uniqueness_proof s0 t0).
+  apply Equivalence_Reflexive.
+  unfold MR.
+  eapply well_founded_ltof.
+  reflexivity.
+Qed.
+  
+    
+(* coq v.8.2 *)
+(*
+Axiom proofIrrel : forall (P:Prop) (p q:P), p = q.
+*)
+(*
+Lemma oddRoddFrom : 
+  forall f (fOpaque : opaque f) X n b p, 
+    exists q,
+      aeq 
+      (@oddR f X n b p)
+      (@oddFromEvenPr f (f X) _ (evenR' f (@oddR f X b)) b q).
+Proof.
+  intros.
+  assert (ord b < ord (succT b)) as q.
+  num.
+  exists q.
+  remember (ord n) as nn in |- *.
+  generalize dependent b.
+  generalize dependent n.
+  induction nn; intros.
+  induction n.
+  simpl in p; induction b; simpl in p; inversion p.
+  destruct a0; simpl in *; inversion Heqnn.
+
+  unfold oddR at 1.
+  unfold oddR_func.
+(*
   Check Fix_measure_sub.
   Print Fix_measure_sub.
+*)
   pose (fun (n0 : list bool)
            (oddR0 : forall n' : {n' : list bool | ord n' < ord n0},
                     Br (proj1_sig n')) (b0 : list bool)
@@ -826,7 +898,7 @@ Proof.
   rewrite (le_uniqueness_proof s0 t0).
   apply Equivalence_Reflexive. reflexivity.
 Qed.
-
+*)
 Require Import Coq.Init.Wf.
 Require Import Coq.Arith.Wf_nat.
 

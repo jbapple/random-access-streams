@@ -116,7 +116,7 @@ iterate does not do any of that extra work. Its algorithmic efficiency is not pr
 
 *)
 
-Hint Rewrite odUnfold using batMorph_Morphism : core.
+Hint Rewrite odUnfold : core.
 
 Hint Unfold ord.
 

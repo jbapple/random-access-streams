@@ -78,11 +78,14 @@ Proof.
   simpl.
   constructor.
   apply xy; try (apply opaqueEq; apply aeqEquiv); reflexivity.
-  apply fraunBraunMorph_Morphism. intros; subst.
+  try (apply fraunBraunMorph_Morphism); try (apply fraunBraunMorph_Proper). intros; subst.
   apply xy; try (intros; subst; reflexivity); try auto.
-  apply fraunBraunMorph_Morphism. intros; subst.
+  try (apply fraunBraunMorph_Morphism); try (apply fraunBraunMorph_Proper). intros; subst.
   apply xy; try (intros; subst; reflexivity); try auto.
 Qed.
+
+Check fraunBraunMorph.
+Check fraunBraunMorph_Proper.
 
 (* braunFraun and fraunBraun are inverses: *)
 
@@ -120,7 +123,8 @@ Proof.
   Qed.
   Show.
   intros.
-  rewrite fraunBraunMorph_Morphism.
+  try (rewrite fraunBraunMorph_Morphism).
+  try (rewrite fraunBraunMorph_Proper).
   apply braunBack' with (x := x).
   assumption.
   unfold exteq, opaque. des.
