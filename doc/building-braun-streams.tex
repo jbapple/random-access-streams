@@ -67,7 +67,7 @@ These more permissive structures, however, make some operations unsafe when buil
 
 For example, a user constructing an infinite list in 
 Haskell\footnote{The lazy, purely-functional language Haskell \cite{haskellReport} is used for program listings throughout this report.
-The Braun stream algorithms have been implemented by the author in Haskell and are available in an open source library \cite{website}. } 
+The Braun stream algorithms have been implemented in Haskell by the author and are available in an open source library \cite{website}. } 
 can write {\tt let bees = 'b' : bees} to construct a stream.
 Because the cons operation on native Haskell lists does need to inspect its second argument, {\tt bees} is constructed without trouble.
 An example of how this fails in a typical modern random-access list is shown in Fig.~\ref{23consFail}.
@@ -751,12 +751,14 @@ hiccups:
 * repeated function application not built-in (show equal to another formulation)
 \end{comment}
 
-\section{Conclusion}
+\section{Future work}
 \label{conclSect}
 
+\begin{comment}
 This paper presents two algorithms for efficiently building Braun streams.
 The first algorithm, {\tt iterate}, builds Braun streams from linear streams in linear time.
 The second algorithm, {\tt cycle}, builds cyclic Braun streams from possibly infinite lists in optimal space.
+\end{comment}
 
 Although Braun streams offer safe, efficient operations that other random-access lists do not support, they may be superseded in the infinite setting as they were in the finite setting.
 There may be a functional stream datatype that can support logarithmic-time indexing and constant-time cons.
