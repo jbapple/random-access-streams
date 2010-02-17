@@ -45,10 +45,12 @@ Variable iterp :
   forall (A:Set) f (x:A) b, 
     applyn (ord b) f x
     = bat (iterate f x) b.
+
 (*
 CoFixpoint repcl (A:Set) (x:A) :=
   Cons x (repcl x).
 *)
+
 Definition frobcl (A:Set) (x:CoList A) : CoList A :=
   match x with
     | Nil => Nil _
@@ -60,6 +62,19 @@ Lemma frobeqcl :
 Proof.
   destruct x; simpl; reflexivity.
 Qed.
+
+Definition frobStream (A:Set) (x:Stream A) : Stream A :=
+  match x with
+    | More h t => More h t
+  end.
+
+Lemma frobSt :
+  forall A (x:Stream A), frobStream x = x.
+Proof.
+  destruct x; simpl; reflexivity.
+Qed.
+
+
 (*
 Lemma infinf :
   forall (A:Set) (x:A), InfiniteCoList (repcl x).
@@ -84,6 +99,7 @@ Proof.
   Guarded.
 Qed.
 *)
+
 CoInductive BraunRef (A:Set) : Set :=
 | Conr : A -> BraunRef A -> BraunRef A -> BraunRef A
 | Ref : list bool -> BraunRef A.
@@ -94,6 +110,7 @@ Inductive FiniteBraun (A:Set) : BraunRef A -> nat -> Prop :=
   FiniteBraun o l ->
   FiniteBraun e r ->
   FiniteBraun (@Conr A h o e) (l+r).
+
 (*
 CoInductive InfiniteBraun (A:Set) : BraunRef A -> Prop :=
 | InfiniteConr : forall h o e,
@@ -101,11 +118,13 @@ CoInductive InfiniteBraun (A:Set) : BraunRef A -> Prop :=
   InfiniteBraun e ->
   InfiniteBraun (Conr h o e).
 *)
+
 (*
 CoFixpoint repbr (A:Set) (x:A) :=
   let r := repbr x in
   Conr x r r.
 *)
+
 Definition frob n (x:BraunRef n) : BraunRef n :=
   match x with
     | Conr h o e => Conr h o e
@@ -116,6 +135,7 @@ Lemma frobeq : forall n (x:BraunRef n), x = frob x.
 Proof.
   destruct x; simpl; reflexivity.
 Qed.
+
 (*
 Lemma infbr :
   forall (A:Set) (x:A), InfiniteBraun (repbr x).
@@ -142,10 +162,10 @@ Proof.
   Guarded.
 Qed.
 *)
+
 CoInductive delay (a:Set) : Set :=
   wait : delay a -> delay a
 | halt : a -> delay a.
-
 
 Definition frod a (x:delay a) : delay a :=
   match x with
@@ -158,26 +178,46 @@ Proof.
   destruct x; simpl; reflexivity.
 Qed.
 
-
 Inductive halts (a:Set) : delay a -> nat -> Set :=
   more : forall d n, halts d n -> halts (wait d) (S n)
 | done : forall v, halts (halt v) 0.
 
 Check ex.
 
-Definition get a b (g:{f:a -> delay b & forall x, {n:nat & halts (f x) n}}) (y:a) : b.
-clear; intros; destruct g as [f ph].
-pose (ph y) as py.
-destruct py.
+Check (fun a b => {f:a -> delay b & forall x, {n:nat & halts (f x) n}}).
+
+Locate "{ _ : _ & _ }".
+Print sigT.
+
+Require Import Program.
+
+Definition terminates a b c (f:a -> b -> delay c) x := 
+  forall y, {n:nat & halts (f x y) n}.
+
+Definition get a b c (f:a -> b -> delay c) (x:a) 
+  (p:terminates f x) (y:b) : c.
+intros.
+destruct (p y) as [n h].
+induction h; assumption.
+Defined.
+
+Print get.
+
+(*
+Definition get a b (f:a -> delay b) 
+  (p:@terminates unit a b (fun _ => f) tt) (y:a) : b.
+clear; intros.
+pose (p y) as py.
+destruct py as [n h].
 induction h.
 exact IHh.
 exact v.
 Defined.
 
-Check get.
+Print get.
 
-Definition terminates a b c (f:a -> b -> delay c) x := 
-  forall y, {n:nat & halts (f x y) n}.
+Check get.
+*)
 
 CoFixpoint context a g x b : delay a :=
   match (x,b) with
@@ -191,18 +231,10 @@ Definition trace a g b := @context a g g b.
 
 Definition wellFormed a := {s:BraunRef a & terminates (@trace _) s}.
 
-Definition gtrace a (w:wellFormed a) (b:list bool) : a.
-clear; intros.
-eapply get.
-unfold wellFormed in *.
-destruct w.
-eapply existT.
-unfold terminates in *.
-apply t. exact b.
-Defined.
-
-Print gtrace.
-Print get.
+Definition gtrace a (w:wellFormed a) (b:list bool) : a :=
+  match w with
+    | existT _ h => get h b
+  end.
 
 Definition equivBS A (x:braun A) y :=
   forall b, bat x b = bat y b.
@@ -218,55 +250,86 @@ Require Import Arith.
 Function mymod (n:nat) (m:nat) {measure id n} : nat :=
   match m with
     | 0 => 0
-    | _ =>
+    | S k =>
       match nat_compare n m with
         | Lt => n
         | Eq => 0
         | Gt => mymod (n-m) m
       end
   end.
-clear.
-intros.
+clear; intros n m k meq ceq.
+subst.
 unfold id.
 apply lt_minus.
-subst.
-unfold nat_compare in teq0.
-remember (lt_eq_lt_dec n (S n0)) as ll.
-destruct ll.
-destruct s.
-inversion teq0.
-inversion teq0.
+apply nat_compare_gt in ceq. auto with arith.
 auto with arith.
-auto with arith.
-Defined.
+Qed.
 
 Check mymod_equation.
 
 Lemma mymodUnder : forall x y, x < y -> mymod x y = x.
-  clear; induction x; induction y; intros.
-  inversion H.
+  clear; intros x y xy.
   rewrite mymod_equation.
-  remember (nat_compare 0 (S y)).
-  destruct c.
-  auto. auto.
-  inversion Heqc.
-  omega.
-  rewrite mymod_equation.
-  Locate "_ - _".
-Admitted.
-
+  destruct y.
+  inversion xy.
+  apply nat_compare_lt in xy.
+  rewrite xy; simpl.
+  reflexivity.
+Qed.
 
 Lemma mymodUnderMe : forall x y, mymod x y <= x.
-Admitted.
-
+Proof.
+  clear; intros x.
+  pose (fun z => forall w, mymod z w <= z) as P.
+  assert (P x) as ans.
+  eapply lt_wf_ind.
+  unfold P. clear P.
+  intros. clear x.
+  rewrite mymod_equation.
+  destruct w.
+  auto with arith.
+  remember (nat_compare n (S w)) as nw.
+  destruct nw.
+  auto with arith.
+  auto with arith.
+  assert (mymod (n - S w) (S w) <= (n - S w)) as mid.
+  apply H.
+  apply lt_minus.
+  symmetry in Heqnw.
+  Check nat_compare_gt.
+  apply nat_compare_gt in Heqnw.
+  auto with arith.
+  auto with arith.
+  auto with arith.
+  omega.
+  unfold P in ans; clear P.
+  apply ans.
+Qed.
 
 Lemma mymodUnderYou : forall x y, mymod x (S y) < (S y).
-Admitted.
-
-Check unit.
-Print unit.
-
-Print Stream.
+Proof.
+  clear; intros x.
+  pose (fun z => forall w, mymod z (S w) < (S w)) as P.
+  assert (P x) as ans.
+  eapply lt_wf_ind.
+  unfold P. clear P.
+  intros. clear x.
+  rewrite mymod_equation.
+  remember (nat_compare n (S w)) as nw.
+  destruct nw.
+  auto with arith.
+  symmetry in Heqnw.
+  apply nat_compare_lt in Heqnw.
+  auto with arith.
+  apply H.
+  apply lt_minus.
+  symmetry in Heqnw.
+  apply nat_compare_gt in Heqnw.
+  auto with arith.
+  auto with arith.
+  unfold P in ans; clear P.
+  apply ans.
+Qed.
 
 CoFixpoint streamIter (a:Set) f (x:a) := 
   More x (streamIter f (f x)).
@@ -302,8 +365,12 @@ Definition betta n := betta' n 1.
 *)
 
 Definition betta n := 
-  match powersMod 2 n with
-    | More _ tyl => bettaHelp tyl
+  match n with
+    | 1 => halt tt
+    | _ =>
+      match powersMod 2 n with
+        | More _ tyl => bettaHelp tyl
+      end
   end.
 
 Definition stops a b (f:a -> delay b) x := {n:nat & halts (f x) n}.
@@ -312,6 +379,156 @@ Definition stops a b (f:a -> delay b) x := {n:nat & halts (f x) n}.
 Lemma bettaStop :
   forall n, stops betta (2*n + 1).
 Proof.
+  clear.
+  destruct n.
+  simpl.
+  unfold stops.
+  unfold betta.
+  simpl.
+  eapply existT.
+  Print halts.
+  apply done.
+  rename n into m.
+  unfold stops.
+  eapply existT.
+  unfold betta.
+  
+
+  simpl.
+  pose (m + S (m + 0) + 1) as n.
+  fold n.
+  case_eq n.
+  intros.
+  subst. assert False as f.
+  omega. inversion f.
+  intros k.
+  intros nk.
+  subst.
+  simpl.
+  
+  rewrite <- (frobSt (streamIter _ _)).
+  simpl.
+  rewrite <- (frobSt (streamMap _ _)).
+  simpl.
+  rewrite (frodeq (bettaHelp _)).
+  simpl.
+  remember (mymod 2 (S (S k))) as r.
+  case_eq r; intros.
+  subst.
+  rewrite mymod_equation in H.
+  remember (nat_compare 2 (S (S k))) as q.
+  case_eq q.
+  intros; subst.
+  rewrite H0 in H; simpl.
+  apply nat_compare_eq in H0.
+  assert False as f.
+  omega. inversion f.
+  intros. subst.
+  rewrite H0 in H. assert False as f.
+  omega. inversion f.
+  intros.
+  subst.
+  rewrite H0 in H.
+  apply nat_compare_gt in H0.
+  assert False as f.
+  omega.
+  inversion f.
+  subst.
+  case_eq n.
+  intros; subst.
+  rewrite mymod_equation in H.
+  case_eq (nat_compare 2 (S (S k)));
+  intros I;
+  rewrite I in H.
+  inversion H.
+  inversion H.
+  apply nat_compare_gt in I.
+  assert False as f. omega.
+  inversion f.
+  intros i.
+  intros; subst.
+  case_eq i; intros; subst.
+  case_eq k; intros; subst.
+  rewrite mymod_equation in H.
+  simpl in H. inversion H.
+  rewrite <- (frobSt (streamIter _ _)).
+  simpl.
+  rewrite <- (frobSt (streamMap _ _)).
+  simpl.
+  Focus 2.
+  rewrite mymod_equation in H.
+  case_eq (nat_compare 2 (S (S k))); intros I;
+    rewrite I in H.
+  inversion H.
+  inversion H.
+  apply nat_compare_gt in I.
+  assert False as f.
+  omega.
+  inversion f.
+  assert (n = m + m) as nm.
+  omega.
+  clear nk.
+  rewrite mymod_equation.
+  case_eq (nat_compare 4 (S (S (S n)))); intros I; subst; simpl.
+  apply nat_compare_eq in I.
+  assert False as f.
+  omega. inversion f.
+  apply nat_compare_lt in I.
+  assert (0 < m) as J.
+  omega. clear I.
+  rewrite (frodeq (bettaHelp _)).
+  simpl.
+  Print halts.
+  Print wait.
+  apply more.
+  apply more.
+  Focus 2.
+  apply more.
+  assert (m = 0) as J.
+  apply nat_compare_gt in I. omega.
+  subst.
+  clear I.
+  simpl.
+  rewrite mymod_equation.
+  simpl.
+  rewrite (frodeq (bettaHelp _)).
+  simpl.
+  Print halts.
+
+
+  simpl.
+
+  omega.
+  
+  rew
+
+
+
+  rewrite mymod_equation.
+  destruct n.
+  simpl.
+  
+
+  dependent destruction (m + S (m + 0) + 1).
+  simpl.
+
+  Print halts.
+  Check (@frobSt nat).
+  rewrite <- (@frobSt nat (streamIter _ _)).
+  simpl.
+  rewrite <- (@frobSt nat (streamMap _ _)).
+  simpl.
+
+  simpl.
+  rewrite mymod_equation.
+  simpl.
+  rewrite mymod_equation.
+  simpl.
+  unfold mymod.
+  Check frob.
+  Check frobStream.
+  unfold bettaHelp
+  r
 Admitted.
 (*
   clear.
