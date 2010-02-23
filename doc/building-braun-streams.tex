@@ -57,8 +57,8 @@ The restrictive structural constraints that give Braun trees slower deque operat
 This paper presents two new algorithms for building Braun streams from lazy lists.
 The first algorithm builds a Braun stream from a linear stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite lists \citeStyle{okasakiBraun}.
 The second algorithm builds a cyclic Braun stream from a possibly infinite list. 
-When applied to finite lists of length $n$, this algorithm generates Braun streams that use $O(n^2)$ space, even when forced to arbitrary depth.
-In contrast, circular streams represented with finger trees use $\Omega(i)$ space when forced to depth $i$.
+When applied to finite lists of length $n$, this algorithm generates Braun streams that use $O(n^2)$ space, even after forcing an arbitrary number of nodes.
+In contrast, circular streams represented with finger trees use $\Omega(\lg i)$ space when the first $i$ nodes are forced.
 
 Correctness proofs of the two algorithms are presented along with discussion of formal verifications using the Coq proof assistant.
 
@@ -73,7 +73,7 @@ For example, a user constructing an infinite list in
 Haskell\footnote{The lazy, purely-functional language Haskell \citeStyle{haskellReport} is used for program listings throughout this report.
 The Braun stream algorithms have been implemented in Haskell by the author and are available in an open source library \citeStyle{website}. } 
 can write {\tt let bees = 'b' : bees} to construct a stream.
-Because the cons operation on native Haskell lists does need to inspect its second argument, {\tt bees} is constructed without trouble.
+Because the cons operation on native Haskell lists does not need to inspect its second argument, {\tt bees} is constructed without trouble.
 An example of how this fails in a typical modern random-access list is shown in Fig.~\ref{23consFail}.
 
 \begin{figure}
@@ -104,7 +104,7 @@ safeBees = stream 'b'
 \caption{
 A simplification of 2-3 finger trees for use as a stream \citeStyle{HinzePat}. 
 Use of {\tt cons} as in {\tt dangerousBees} produces $\bot$, but a stream like {\tt safeBees} can be created while avoiding {\tt cons}.
-However, {\tt safeBees} uses $\Omega(i)$ space when forced to depth $i$.
+However, {\tt safeBees} uses $\Omega(\lg i)$ the first $i$ nodes are forced.
 }
 \label{23consFail}
 \label{23stream}
@@ -120,7 +120,7 @@ Because of this, {\tt dangerousBees} is actually undefined.
 
 Though {\tt cons} is an unsafe operation, streams can still be built of 2-3 finger trees by avoiding {\tt cons}.
 Figure~\ref{23stream} also shows {\tt safeBees}, which does not evaluate to $\bot$, unlike {\tt dangerousBees}.
-On the other hand, it uses $\Omega(i)$ space when forced to depth $i$.
+On the other hand, it uses $\Omega(\lg i)$ space when the first $i$ nodes are forced.
 
 \begin{figure}
 \begin{alltt}
@@ -215,10 +215,10 @@ ord (False:r) = 2 + 2*(ord r)
 
 list :: Integer -> [Bool]
 list 0 = []
-list n = 
+list x = 
     case x `mod` 2 of
-      | 1 -> False:(list ((x-1)`div`2))
-      | 0 -> True:(list ((x-2)`div`2))
+      1 -> False:(list ((x-1)`div`2))
+      0 -> True:(list ((x-2)`div`2))
 \end{alltt}
 \caption{Indexing into Braun streams and index conversions.
 See Figure~\ref{braunDef} for the definition of the {\tt BS} datatype.}
@@ -336,7 +336,7 @@ This implies that
 \begin{displaymath}
 \begin{array}{rcl}
 (\oddFrom f\ (f^{2^k-1}x)\ e)@b & = & (\oddFrom f\ (f^{2^{k+1}-1}x)\ (\evens e))@d \\
-& = & f^{2^{k+1}d+2^{k+1}-1} x \\
+& = & f^{2^{k+1}\ord{d}+2^{k+1}-1} x \\
 %& = & f^{2^k2d+2^k+2^k-1} x \\
 %& = & f^{2^k(2d+1)+2^k-1} x \\
 & = & f^{2^k\ord{\cons{\true}{d}}+2^k-1} x \\
@@ -440,7 +440,7 @@ With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\
 \section{Cycling Possibly Infinite Lists}
 \label{cycleSect}
 
-As mentioned in Sect.~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ uses $\Omega(i)$ space in 2-3 trees and similar indexable deques.
+As mentioned in Sect.~\ref{logspaceCycle}, forcing the first $i$ nodes of a cyclic stream uses $\Omega(\lg i)$ space in 2-3 trees and similar indexable deques.
 If constructed properly, a cyclic stream with cycle length $m$ can be represented as a Braun stream in $O(m^2)$ space.
 This section describes an algorithm to produce a cyclic Braun stream of minimal size.
 
