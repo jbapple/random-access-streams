@@ -1,6 +1,7 @@
-\documentclass[envcountsect]{llncs}
-%\usepackage{amsthm}
+\documentclass[preprint,natbib]{sigplanconf}
+\usepackage{amsthm}
 \usepackage{amssymb,amsmath,algorithmic,algorithm,verbatim,alltt,url}
+\usepackage{graphicx}
 
 \DeclareMathOperator{\oddFrom}{oddFromEven}
 \DeclareMathOperator{\nil}{\langle\rangle}
@@ -18,9 +19,10 @@
 \DeclareMathOperator{\od}{od}
 \newcommand{\app}{+\!\!\!+\ }
 \newcommand{\share}{{\tt Share} }
+\newcommand{\citeStyle}[1]{\cite{#1}}
 %\renewcommand{\algorithmiccomment}[1]{// #1}
 
-\begin{comment}
+%\begin{comment}
 \newtheorem{theorem}{Theorem}
 \newtheorem{claim}[theorem]{Claim}
 \newtheorem{lemma}[theorem]{Lemma}
@@ -32,7 +34,7 @@
 %\theoremstyle{definition}
 \newtheorem{definition}{Definition}
 
-\end{comment}
+%\end{comment}
 
 \usepackage[pdftex]{hyperref}
 \hypersetup{pdftitle={Building Braun Streams Efficiently}}
@@ -42,20 +44,18 @@
 
 \title{Building Braun Streams Efficiently}
 
-\author{Jim Apple}
-
-\institute{}
+\authorinfo{Jim Apple}{}{}
 
 \maketitle
 
 \section*{Abstract}
 
-Braun trees are a functional data structure with logarithmic-time indexing, update, and deque operations \cite{hoogerwoord}.
-They are mostly superseded by finger trees, which decrease to a constant the time required for deque operations \cite{kaplan96purely,HinzePat}.
+Braun trees are a functional data structure with logarithmic-time indexing, update, and deque operations \citeStyle{hoogerwoord}.
+They are mostly superseded by finger trees, which decrease to a constant the time required for deque operations \citeStyle{kaplan96purely,HinzePat}.
 The restrictive structural constraints that give Braun trees slower deque operations make them well-suited for operations on infinite lists, or {\em streams}.
 
 This paper presents two new algorithms for building Braun streams from lazy lists.
-The first algorithm builds a Braun stream from a linear stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite lists \cite{okasakiBraun}.
+The first algorithm builds a Braun stream from a linear stream; previous algorithms to build Braun trees either require superlinear time or terminate only for finite lists \citeStyle{okasakiBraun}.
 The second algorithm builds a cyclic Braun stream from a possibly infinite list. 
 When applied to finite lists of length $n$, this algorithm generates Braun streams that use $O(n^2)$ space, even when forced to arbitrary depth.
 In contrast, circular streams represented with finger trees use $\Omega(i)$ space when forced to depth $i$.
@@ -65,13 +65,13 @@ Correctness proofs of the two algorithms are presented along with discussion of 
 \section{Introduction}
 \label{logspaceCycle}
 
-Braun trees are a tightly-constrained functional data structure offering array and deque operations in logarithmic time \cite{hoogerwoord,okasakiBraun}.
-Modern data structures with looser constraints support constant-time deque operations, and perform better than Braun trees in practice \cite{HinzePat,okasakiSkewLists}.
+Braun trees are a tightly-constrained functional data structure offering array and deque operations in logarithmic time \citeStyle{hoogerwoord,okasakiBraun}.
+Modern data structures with looser constraints support constant-time deque operations, and perform better than Braun trees in practice \citeStyle{HinzePat,okasakiSkewLists}.
 These more permissive structures, however, make some operations unsafe when building infinite lists, or {\em streams}.
 
 For example, a user constructing an infinite list in 
-Haskell\footnote{The lazy, purely-functional language Haskell \cite{haskellReport} is used for program listings throughout this report.
-The Braun stream algorithms have been implemented in Haskell by the author and are available in an open source library \cite{website}. } 
+Haskell\footnote{The lazy, purely-functional language Haskell \citeStyle{haskellReport} is used for program listings throughout this report.
+The Braun stream algorithms have been implemented in Haskell by the author and are available in an open source library \citeStyle{website}. } 
 can write {\tt let bees = 'b' : bees} to construct a stream.
 Because the cons operation on native Haskell lists does need to inspect its second argument, {\tt bees} is constructed without trouble.
 An example of how this fails in a typical modern random-access list is shown in Fig.~\ref{23consFail}.
@@ -102,7 +102,7 @@ safeBees :: TTT Char
 safeBees = stream 'b'
 \end{alltt}
 \caption{
-A simplification of 2-3 finger trees for use as a stream \cite{HinzePat}. 
+A simplification of 2-3 finger trees for use as a stream \citeStyle{HinzePat}. 
 Use of {\tt cons} as in {\tt dangerousBees} produces $\bot$, but a stream like {\tt safeBees} can be created while avoiding {\tt cons}.
 However, {\tt safeBees} uses $\Omega(i)$ space when forced to depth $i$.
 }
@@ -110,7 +110,7 @@ However, {\tt safeBees} uses $\Omega(i)$ space when forced to depth $i$.
 \label{23stream}
 \end{figure}
 
-Figure~\ref{23consFail} shows the datatype definition and {\tt cons} operation for Hinze and Paterson's 2-3 finger trees \cite{HinzePat}.
+Figure~\ref{23consFail} shows the datatype definition and {\tt cons} operation for Hinze and Paterson's 2-3 finger trees \citeStyle{HinzePat}.
 In this representation, streams are linear lists of trees of increasing depth generated by nesting {\tt Node}s.
 At the top of each tree is a {\tt Digit} containing one to four {\tt Node} trees.
 
@@ -140,7 +140,7 @@ smallEyes =
 \end{alltt}
 \caption{
 Braun streams along with their {\tt cons} operation.
-The ``$\sim$'' before the pattern match in {\tt cons} is an {\em irrefutable pattern} -- a pattern which is matched lazily \cite{haskellReport}.
+The ``$\sim$'' before the pattern match in {\tt cons} is an {\em irrefutable pattern} -- a pattern which is matched lazily \citeStyle{haskellReport}.
 The {\tt cons} operation is safe, so the stream {\tt eyes} is not $\bot$.
 The stream {\tt smallEyes} only uses $O(1)$ space.
 }
@@ -168,9 +168,9 @@ Additionally, unlike {\tt safeBees} in Fig.~\ref{23stream}, {\tt smallEyes} in F
 Like 2-3 finger trees, other stream candidates offering $O(1)$ deque operations do not support safe {\tt cons} or constant-space construction of repeating streams. This includes:
 
 \begin{itemize}
-\item Skew binary random access lists, which offer $O(1)$ worst-case {\tt cons} \cite{okasakiSkewLists}
-\item Edison's \verb|BinaryRandList|, which supports {\tt cons} in $O(\log n)$ worst-case time and $O(1)$ expected time \cite{edison,holtersThesis}
-\item Segmented binary lists, which offer $O(1)$ worst-case {\tt cons} \cite{okasakiThesis}
+\item Skew binary random access lists, which offer $O(1)$ worst-case {\tt cons} \citeStyle{okasakiSkewLists}
+\item Edison's \verb|BinaryRandList|, which supports {\tt cons} in $O(\log n)$ worst-case time and $O(1)$ expected time \citeStyle{edison,holtersThesis}
+\item Segmented binary lists, which offer $O(1)$ worst-case {\tt cons} \citeStyle{okasakiThesis}
 \end{itemize}
 
 %What does linear time mean on infinite streams?
@@ -184,6 +184,11 @@ Section~\ref{conclSect} concludes.
 
 \section{Braun Streams}
 \label{braunSect}
+
+\begin{figure}
+\includegraphics[width=0.5\textwidth]{count} 
+\caption{The first four levels of a Braun tree representing the natural numbers in their usual order.}
+\end{figure}
 
 Braun streams are infinite full binary trees.
 The $0$th element is stored in the root of the tree, while odd-indexed elements appear in the left subtree and even-indexed elements appear in the right.
@@ -230,12 +235,12 @@ slowFromLStream :: LStream a -> Stream a
 slowFromLStream (Cons x xs) = cons x (slowFromLStream xs)
 \end{alltt}
 
-As Okasaki notes, this algorithm takes $\Omega(n \log n)$ time \cite{okasakiBraun}.
+As Okasaki notes, this algorithm takes $\Omega(n \log n)$ time \citeStyle{okasakiBraun}.
 For streams, the details of what this means are complicated by the fact that there is no finite $n$ that is the size of the list.
 Given a linear stream forced to depth $i$ and a Braun stream constructed from it using {\tt slowFromLStream}, forcing the first $i$ nodes of the Braun stream will take $\Omega(i \log i)$ time.
 This is because {\tt cons} calls itself recursively on one of the two subtrees, as can be seen in Fig.~\ref{braunCons}.
 
-Okasaki presents a function {\tt makeArray} that builds a Braun tree from a linear list in $\Theta(n)$ time, where $n$ is the length of the list \cite{okasakiBraun}.
+Okasaki presents a function {\tt makeArray} that builds a Braun tree from a linear list in $\Theta(n)$ time, where $n$ is the length of the list \citeStyle{okasakiBraun}.
 Unfortunately, this algorithm builds the tree from the leaves up, which is unsuitable for building streams.
 Additionally, it does not produce a top-level constructor until the algorithm is complete, so the time complexity for {\tt at (makeArray l) []} is $\Omega(n)$ when {\tt l} is of size $n$, rather than $O(1)$ as it would be with a root-first algorithm.
 This section presents an linear-time algorithm ($O(i)$ when forcing the first $i$ nodes of the result) that works for streams.
@@ -439,7 +444,7 @@ As mentioned in Sect.~\ref{logspaceCycle}, forcing a cyclic stream to depth $i$ 
 If constructed properly, a cyclic stream with cycle length $m$ can be represented as a Braun stream in $O(m^2)$ space.
 This section describes an algorithm to produce a cyclic Braun stream of minimal size.
 
-In our implementation of Braun streams in a Haskell library, sharing is induced by reusing the same variable more than once in an expression \cite{website}.
+In our implementation of Braun streams in a Haskell library, sharing is induced by reusing the same variable more than once in an expression \citeStyle{website}.
 For the purposes of the proofs in this section, it will help to be explicit about how much memory a Braun stream occupies by using a representation that can have leaves.
 This representation is presented as the datatype {\tt Share} in Fig.~\ref{shareDef}.
 The leaves contain lists of booleans; these are called {\em pointers}, and they correspond to locations as in Fig.~\ref{basicCode}.
@@ -595,7 +600,7 @@ With the leaves, this makes the tree at least size $2^{r+1} m \beta_m + 2^{r+1} 
 
 At a minimum, when $m$ is $1$, $n$ is a power of $2$, and the cyclic Braun stream can be represented by a {\tt Share} of size $4n-1$.
 At a maximum, when $n$ is prime, $\beta_n$ can be as large as $n-1$, and the minimal {\tt Share} is of size $2n(n-1)+1$.
-A 90-year-old conjecture of Artin proposes that this maximum occurs infinitely often \cite{artin}.
+A 90-year-old conjecture of Artin proposes that this maximum occurs infinitely often \citeStyle{artin}.
 
 \subsection{Algorithm for Producing Minimal Cyclic Braun Streams}
 \label{cycleAlgo}
@@ -723,7 +728,7 @@ Since no duplicate addresses appear, and since, by the analysis in Lemma~\ref{cy
 \section{Formalization in Coq}
 \label{coqSect}
 
-Some of the details of the algorithms presented above have been formalized in the Coq proof assistant \cite{coq,website}.
+Some of the details of the algorithms presented above have been formalized in the Coq proof assistant \citeStyle{coq,website}.
 Among these details is the entirety of the correctness proof of {\tt iterate} found in Sect.~\ref{iterSect}.
 
 One of the advantages of formalizing proofs of functional algorithms in Coq is that the data structures and algorithms can sometimes be directly embedded in Coq using its built-in syntax.
@@ -766,7 +771,7 @@ The second algorithm, {\tt cycle}, builds cyclic Braun streams from possibly inf
 
 Although Braun streams offer safe, efficient operations that other random-access lists do not support, they may be superseded in the infinite setting as they were in the finite setting.
 There may be a functional stream datatype that can support logarithmic-time indexing and constant-time cons.
-There may also be a functional stream datatype that offers tunable performance in a trade-off between deque operations and indexing, as in \cite{hinzeArray}.
+There may also be a functional stream datatype that offers tunable performance in a trade-off between deque operations and indexing, as in \citeStyle{hinzeArray}.
 
 Although the algorithms presented above have been partially formalized in a proof assistant, there is still room for improvement in the formalization.
 This includes formalization in a system that supports a more direct embedding of Haskell code and formalization of the time bounds of the algorithms.
@@ -779,7 +784,7 @@ Also good for finite Braun trees, because can get index i in time $i$, not $n+i$
 complete formalization
 \end{comment}
 
-\bibliographystyle{splncs}
+\bibliographystyle{abbrvnat}
 \bibliography{braun}
 
 \end{document}
