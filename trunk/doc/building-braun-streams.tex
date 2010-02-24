@@ -149,6 +149,25 @@ The stream {\tt smallEyes} only uses $O(1)$ space.
 \label{braunShare}
 \end{figure}
 
+\begin{figure}
+\begin{alltt}
+data LStream a = Cons \{lhead::a,
+                       ltail::LStream a\}
+
+seas :: LStream 'Char'
+seas = Cons 'c' seas
+
+puddles :: LStream 'Char'
+puddles = 
+  let ans = Cons 'c' ans
+  in ans
+\end{alltt}
+\caption{
+Linear streams 
+}
+\end{figure}
+
+
 Figure~\ref{braunCons} illustrates that Braun streams are better suited for these cases.
 First, {\tt cons} is safe.
 The result of an application of {\tt cons} is guaranteed to have {\tt BS} as its top-level constructor.
@@ -249,7 +268,8 @@ The code for the algorithm is displayed in Fig.~\ref{iterateCode}.
 \begin{figure}
 \begin{alltt}
 instance Functor BS where
-    fmap f (BS h o e) = BS (f h) (fmap f o) (fmap f e)
+    fmap f (BS h o e) = 
+      BS (f h) (fmap f o) (fmap f e)
 
 oddFromEven :: (a -> a) -> a -> BS a -> BS a
 oddFromEven f x  \(\sim\)(BS h od ev) =
@@ -261,9 +281,6 @@ iterate f x =
         od = oddFromEven f (f x) ev
     in
       BS x od ev
-
-data LStream a = Cons \{lhead::a,
-                       ltail::LStream a\}
 
 fromLStream :: LStream a -> Stream a
 fromLStream s = fmap lhead (iterate ltail s)
@@ -440,6 +457,15 @@ With the last step justified by lemma~\ref{iterateSublemma}. This is just $f^{2\
 \section{Cycling Possibly Infinite Lists}
 \label{cycleSect}
 
+\begin{figure}
+\includegraphics[width=0.5\textwidth]{cycleIncrOffs} 
+\caption{
+A cyclic Braun stream with cycle length 3.
+The node $a:\langle b,c \rangle$ corresponds to the $a$th node in the stream with increment $b$ and offset $c$.
+Dotted edges connect nodes with the same address.
+}
+\end{figure}
+
 As mentioned in Sect.~\ref{logspaceCycle}, forcing the first $i$ nodes of a cyclic stream uses $\Omega(\lg i)$ space in 2-3 trees and similar indexable deques.
 If constructed properly, a cyclic stream with cycle length $m$ can be represented as a Braun stream in $O(m^2)$ space.
 This section describes an algorithm to produce a cyclic Braun stream of minimal size.
@@ -465,11 +491,13 @@ data Share a = Branch a (Share a) (Share a)
              | Ref [Bool]
 
 
+context :: Share a -> Share a -> [Bool] -> a
 context g (Branch v _ _) [] = v
 context g (Branch _ o _) (True:r) = context g o r
 context g (Branch _ _ e) (False:r) = context g e r
 context g (Ref p) r = context g g (p++r)
 
+trace :: Share a -> [Bool] -> a
 trace g b = context g g b
 \end{alltt}
 \caption{A definition of Braun streams with explicit sharing, along with a function {\tt trace} that potentially extracts a value from the {\tt Share} for a location given as a {\tt [Bool]}.}
