@@ -9,10 +9,10 @@ Using lists, or traditional, linear streams, definind in "Data.Stream" as
 
 > data Stream a = Cons a (Stream a)
 
-@O(i)@ time is required to access the @i@'th element from the head of the stream. 
-This module offers Data.RandomAccessStream.'Stream', taking only @O(lg i)@ time to access the @i@'th element, but @O(lg n)@ time to perform a 'cons'.
+@Θ(i)@ time is required to access the @i@'th element from the head of the stream. 
+This module offers Data.RandomAccessStream.'Stream', taking only @O(lg i)@ time to access the @i@'th element, but @Θ(lg n)@ time to perform a 'cons'.
 
-Of course, streams are infinite, so it is not clear what it means to take @O(f(n))@ time to perform an operation, since there is no @n@ implicitly defined as the size of the stream. 
+Of course, streams are infinite, so it is not clear what it means to take @Θ(f(n))@ time to perform an operation, since there is no @n@ implicitly defined as the size of the stream. 
 Traversing the first 2^i-1 elements of a RandomAccessStream (using 'fromList', for instance) takes Ω(2^i-1) time.
 If it takes time t to traverse these elements, it will take t+Ω(i) time to traverse them after calling 'cons'.
 If a linear stream were used instead, the traversal time would have only increased to t+1.
@@ -187,18 +187,18 @@ instance Monad Stream where
           ev (Stream _ _ e) = e
 
 {- | 
-O(lg n).
+Θ(lg n).
 Adds an element onto the head of the 'Stream'.
-If traversing the first n elements of a stream x takes time t, traversing the first n elements of (cons y x) takes t + O(lg n) time.
+If traversing the first n elements of a stream x takes time t, traversing the first n elements of (cons y x) takes t + Θ(lg n) time.
 The extra cost is incurred at the elements at positions 2^i-1, counting from 0.
 -}
 cons :: a -> Stream a -> Stream a
 cons x ~(Stream p q r) = Stream x (cons p r) q
 
 {- | 
-O(lg n).
+Θ(lg n).
 Removes an element from the head of the 'Stream'.
-If traversing the first n+1 elements of a stream x takes time t, traversing the first n elements of (tail x) takes t + O(lg n) time.
+If traversing the first n+1 elements of a stream x takes time t, traversing the first n elements of (tail x) takes t + Θ(lg n) time.
 The extra cost is incurred just before the elements at positions 2^i-2, counting from 0.
 -}
 tail :: Stream a -> Stream a
@@ -213,7 +213,7 @@ head (Stream p _ _) = p
 Appends a list onto the front of a stream without incurring a 'cons'-ing costs.
 See also '+++'.
 If traversing the first n elements of a list x takes time t, traversing the first n elements of x++y takes time t+O(n).
-If a list x has n elements, and traversing them takes time t, and traversing the first m elements of a stream y takes time s, the traversing the first n+m elements of x++y takes time t + s + O(n+m).
+If a list x has n elements, and traversing them takes time t, and traversing the first m elements of a stream y takes time s, the traversing the first n+m elements of x++y takes time t + s + Θ(n+m).
 
 Compared with '+++', '++' is faster except when the size of the list is a small fraction of the number of elements of the stream that eventually get forced.
 
@@ -243,7 +243,7 @@ x ++ y = fromList $ (L.++) x $ toList y
 {- |
 
 Appends a list onto the front of a stream.
-It traversing the first n elements of a list x takes time t, and traversing the first m elements of a stream y takes time s, the traversing the first n+m elements of x++y takes time t + s + O(n+m).
+It traversing the first n elements of a list x takes time t, and traversing the first m elements of a stream y takes time s, the traversing the first n+m elements of x++y takes time t + s + Θ(n+m).
 
 
 If the list has length n and n+k elements from the resulting stream are forced, we traverse an
@@ -280,7 +280,7 @@ intersperse :: a -> Stream a -> Stream a
 intersperse y x = interleave x (repeat y)
 
 {- | 
-O(lg n) thunks placed at positions 2^i-4. @interleave x y@
+Θ(lg n) thunks placed at positions 2^i-4. @interleave x y@
 creates a stream that alternates between the values in x and y,
 starting with x.
 
@@ -292,7 +292,7 @@ interleave x y = Stream (head x) y (tail x)
 
 {- |
 
-O(|result|) thunks, O(1) at each element of the result. @intercalate x
+Θ(|result|) thunks, O(1) at each element of the result. @intercalate x
 y@ concatenates the elements of y, using x as glue. Every place where
 two lists form y are joined, x in inserted.
 
@@ -321,7 +321,7 @@ oddFromEven f x ~(Stream h od ev) =
 
 {- | 
 
-Forcing n elements of the result traverses O(n) thunks, O(1) at each
+Forcing n elements of the result traverses Θ(n) thunks, O(1) at each
 element of result. The passed function is called n times.
 
 -}
@@ -510,17 +510,17 @@ cyclePossiblyTrunc2' ans (Stream (n,Right s) _ _) =
 -}
 
 
--- | O(n).
+-- | Θ(n).
 {-# INLINE scanl #-}
 scanl :: (a -> b -> a) -> a -> Stream b -> Stream a
 scanl f z = fromList . L.scanl f z . toList
 
--- | O(n).
+-- | Θ(n).
 {-# INLINE scanl1 #-}
 scanl1 :: (a -> a -> a) -> Stream a -> Stream a
 scanl1 f = fromList . L.scanl1 f . toList
 
--- | O(n).
+-- | Θ(n).
 unfoldr :: (c -> (a,c)) -> c -> Stream a
 unfoldr f x = fmap fst $ iterate (idify f) (f x)
     where
@@ -530,7 +530,7 @@ unfoldr f x = fmap fst $ iterate (idify f) (f x)
 
 {- |
 
-@O(n)@. Turns the first n items into a list. Returns the empty list if
+@Θ(n)@. Turns the first n items into a list. Returns the empty list if
 @n<=0@.
 
 -}
@@ -564,7 +564,7 @@ listGenericDrop _ x = x
 If you drop m items and inspect n items from the remaining stream,
 'dropWithCons' takes
 
-* O(lg (m-1+n) + lg (m-2+n) + . . . + lg n) time for the m calls to
+* Θ(lg (m-1+n) + lg (m-2+n) + . . . + lg n) time for the m calls to
   'tail' that construct the dropped list and advance to the head of
   the remaining list.
 
@@ -573,10 +573,10 @@ If you drop m items and inspect n items from the remaining stream,
 Doing so by turning it into a linear stream, then turning it back into
 a RandomAccessStream, as in 'drop' takes
 
-* O(m) time to construct the dropped list and advance to the head of
+* Θ(m) time to construct the dropped list and advance to the head of
   the remaining stream.
 
-* O(n) time to construct the remaining RandomAccessStream.
+* Θ(n) time to construct the remaining RandomAccessStream.
 
 When n is much larger than m, 'dropWithCons' may be the faster
 choice. If n and m are close, 'drop' might be faster.
@@ -616,7 +616,7 @@ genericSplitAtWithCons (n+1) s =
     in ((head s) : p, q)
 genericSplitAtWithCons _ s = ([],s)
 
--- | O(|result|).
+-- | Θ(|result|).
 takeWhile :: (a -> Bool) -> Stream a -> [a]
 takeWhile f = L.takeWhile f. toList
 
@@ -742,7 +742,7 @@ listSplitEither (x:xs) =
 
 {- |
    
-   @O(lg i)@. Find the element at index @i@. Calls error and shows @i@ if @i<0@.
+   @Θ(lg i)@. Find the element at index @i@. Calls error and shows @i@ if @i<0@.
 
 -}
 (!!) :: Stream a -> Int -> a
@@ -763,7 +763,7 @@ at ~(Stream _ q r) n =
 
 {- |
 
-@O(lg i)@. Changes the value at position @i@ by applying function
+@Θ(lg i)@. Changes the value at position @i@ by applying function
 @f@. If @i < 0@, does nothing.
 
 -}
@@ -798,7 +798,7 @@ fromList :: [a] -> Stream a
 fromList y = fmap L.head $ iterate L.tail y
 
 {-
--- | O(n)
+-- | Θ(n)
 fromLinearStream :: S.Stream a -> Stream a
 fromLinearStream y = fmap S.head $ iterate S.tail y
 -}
@@ -1051,7 +1051,7 @@ equalUpTo n x y = compare (upTo n (const id) x)
 
 Returns every nth element. I'm not sure of the exact time complexity,
 but it gets a speedup from every power of 2 that divides n. I suspect
-the time complexity is O(e + r*m) where n is r * 2^e and m elements of
+the time complexity is Θ(e + r*m) where n is r * 2^e and m elements of
 the result stream are forced.
 
 -}
