@@ -169,15 +169,15 @@ end.
 Definition oddFromEvenPr f (x:a) (n:list bool) (v:Br n) : Br (succT n) := oddFromEvenPr' f x v.
 
 Definition toPrime (x:(forall n, Br n)) : fraun.
-unfold Br.
-intros x l.
+unfold BraunFunctions.fraun.
+intros l.
 apply (x (succT l) l).
 rewrite succTisS. omega.
 Defined.
 
 Definition fromPrime (x:fraun) : (forall n, Br n).
 unfold Br.
-intros x n b p.
+intros n b p.
 apply x.
 apply b.
 Defined.
