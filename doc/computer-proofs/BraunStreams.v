@@ -30,58 +30,25 @@ CoInductive coeq : braun -> braun -> Prop :=
 Lemma coeqRefl : forall x, coeq x x.
 Proof.
   cofix.
-  proof.
-    given x : braun.
-    per cases on x.
-    suppose it is (bons h o e).
-    suffices to have 
-      c:(aeq h h)
-      ,l:(coeq o o)
-      ,r:(coeq e e) 
-      to show thesis 
-      by (coeqc c l r).
-      
-    focus on (aeq h h).
-      thus thesis by aeqEquiv.
-    end focus.
-
-    focus on (coeq o o).
-      thus thesis by coeqRefl.
-    end focus.
-
-    focus on (coeq e e).
-      thus thesis by coeqRefl.
-    end focus.
-  end cases.
-  end proof.
+  intros x.
+  destruct x.
+  apply coeqc.
+  apply aeqEquiv.
+  apply coeqRefl.
+  apply coeqRefl.
 Qed.
+
+Print coeqRefl.
 
 Lemma coeqSymm : forall x y, coeq x y -> coeq y x.
 Proof.
   cofix.
-    proof.
-      given x:braun, y:braun, coeq_x_y:(coeq x y).
-      per cases on coeq_x_y.
-      suppose it is (coeqc xh yh xo yo xe ye heq oeq eeq).
-      suffices to have 
-        c:(aeq yh xh)
-        ,l:(coeq yo xo)
-        ,r:(coeq ye xe) 
-      to show thesis by (coeqc c l r).
-
-      focus on (aeq yh xh).
-        thus thesis by heq, aeqEquiv.
-      end focus.
-
-      focus on (coeq yo xo).
-        thus thesis by oeq, coeqSymm.
-      end focus.
-  
-      focus on (coeq ye xe).
-        thus thesis by eeq, coeqSymm.
-      end focus.
-    end cases.
-  end proof.
+  intros x y coeq_x_y.
+  destruct coeq_x_y.
+  apply coeqc.
+  apply aeqEquiv. apply H.
+  apply coeqSymm. assumption.
+  apply coeqSymm. assumption.
 Qed.
 
 Lemma coeqTrans : forall x y z , coeq x y -> coeq y z -> coeq x z.
